@@ -2,35 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>scratch</title>
 <style>
 :root{
-  --bg:#0d0f11;--panel:#121518;--panel2:#171b1f;--ink:#e7eaed;--muted:#737c84;
-  --line:#262c31;--line2:#353d44;--hover:#1c2227;--active:#e4e8eb;--activeInk:#111518;
+  --bg:#000;--panel:#080808;--panel2:#0e0e0e;--ink:#ededed;--muted:#6f6f6f;
+  --line:#202020;--line2:#343434;--hover:#151515;--active:#e8e8e8;--activeInk:#0a0a0a;
   --rail:76px;--top:46px;--radius:8px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
-*{box-sizing:border-box}html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);overflow:hidden}
+*{box-sizing:border-box}html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);overflow:hidden;touch-action:pan-x pan-y;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,textarea,input{font:inherit}button{color:inherit}
 .app{height:100%;display:grid;grid-template-columns:var(--rail) minmax(0,1fr);grid-template-rows:var(--top) minmax(0,1fr)}
-.topbar{grid-column:1/-1;display:grid;grid-template-columns:minmax(110px,1fr) auto minmax(110px,1fr);align-items:center;border-bottom:1px solid var(--line);background:rgba(13,15,17,.94);backdrop-filter:blur(12px);z-index:30}
+.topbar{grid-column:1/-1;display:grid;grid-template-columns:minmax(110px,1fr) auto minmax(110px,1fr);align-items:center;border-bottom:1px solid var(--line);background:#000;backdrop-filter:none;z-index:30}
 .peers{display:flex;align-items:center;gap:7px;min-width:0;padding-left:12px;color:var(--muted);font-size:9px;letter-spacing:.05em;white-space:nowrap}
 .peerDots{display:flex;align-items:center}.peerDot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(255,255,255,.32);margin-left:-2px;box-shadow:0 0 0 2px var(--bg)}.peerDot:first-child{margin-left:0}
 .roomKey{justify-self:center;border:0;background:transparent;color:#919aa2;font:700 10px/1 var(--mono);letter-spacing:.18em;padding:8px;cursor:pointer;user-select:none}
 .topActions{justify-self:end;display:flex;align-items:center;gap:5px;padding-right:8px}
-.iconBtn{width:32px;height:32px;padding:0;border:1px solid transparent;background:transparent;display:grid;place-items:center;border-radius:7px;cursor:pointer;color:#939da5}.iconBtn:hover,.iconBtn:focus-visible{border-color:var(--line2);background:var(--hover);color:#f1f4f6;outline:none}.iconBtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.rail{grid-column:1;grid-row:2;min-height:0;border-right:1px solid var(--line);background:#101316;padding:10px;overflow-y:auto;scrollbar-width:none}.rail::-webkit-scrollbar{display:none}
-.pages{display:grid;gap:8px}.pageBlock{width:54px;height:54px;border:1px solid var(--line);background:#15191d;border-radius:8px;display:grid;grid-template-rows:auto 1fr;align-content:center;text-align:left;padding:7px;cursor:pointer;overflow:hidden;color:#8d969e;transition:.12s}.pageBlock:hover{border-color:#4a555e;background:#1b2025;color:#d8dde1}.pageBlock.active{background:var(--active);border-color:var(--active);color:var(--activeInk)}.pageNo{font:800 8px/1 var(--mono);opacity:.64}.pageLabel{align-self:end;font:700 9px/1.15 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.pageAdd{display:flex;justify-content:center;align-items:center;padding:0;font-size:28px;font-weight:200;line-height:1;color:#89939a;border-style:dashed}.pageAdd:hover{color:#fff}
+.iconBtn{width:32px;height:32px;padding:0;border:1px solid transparent;background:transparent;display:grid;place-items:center;border-radius:7px;cursor:pointer;color:#909090}.iconBtn:hover,.iconBtn:focus-visible{border-color:var(--line2);background:var(--hover);color:#f2f2f2;outline:none}.iconBtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.rail{grid-column:1;grid-row:2;min-height:0;border-right:1px solid var(--line);background:#000;padding:10px;overflow-y:auto;scrollbar-width:none}.rail::-webkit-scrollbar{display:none}
+.pages{display:grid;gap:8px}.pageBlock{width:54px;height:54px;border:1px solid var(--line);background:#000;border-radius:8px;display:grid;grid-template-rows:auto 1fr;align-content:center;text-align:left;padding:7px;cursor:pointer;overflow:hidden;color:#8d8d8d;transition:.12s}.pageBlock:hover{border-color:#4a4a4a;background:#171717;color:#dddddd}.pageBlock.active{background:var(--active);border-color:var(--active);color:var(--activeInk)}.pageNo{font:800 8px/1 var(--mono);opacity:.64}.pageLabel{align-self:end;font:700 9px/1.15 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.pageAdd{display:flex;justify-content:center;align-items:center;padding:0;font-size:24px;font-weight:200;line-height:1;color:var(--active);border-style:dashed}.pageAdd:hover{color:var(--active)}
 .workspace{grid-column:2;grid-row:2;position:relative;min-width:0;min-height:0;background:var(--bg)}
-.editorShell{position:absolute;inset:0;overflow:hidden}.editor{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:0;background:transparent;color:#e8ebed;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 var(--mono);letter-spacing:-.012em;caret-color:#fff;tab-size:2;overflow:auto}.editor::selection{background:#3b4650;color:#fff}.editor::placeholder{color:#3e464d}
-.preview{position:absolute;inset:0;overflow:auto;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 system-ui,sans-serif;color:#e3e7ea}.preview[hidden]{display:none}.preview h1,.preview h2,.preview h3{font-family:var(--mono);letter-spacing:-.04em;margin:1.3em 0 .55em}.preview h1{font-size:2em}.preview h2{font-size:1.45em}.preview h3{font-size:1.16em}.preview p{margin:.7em 0}.preview code,.preview pre{font-family:var(--mono);background:#151a1e;border:1px solid var(--line)}.preview code{padding:.08em .35em;border-radius:4px}.preview pre{padding:14px;overflow:auto;border-radius:6px}.preview pre code{border:0;padding:0;background:transparent}.preview blockquote{margin:1em 0;padding-left:15px;border-left:2px solid #59636b;color:#aeb6bc}.preview a{color:#a8c8e5}.preview img{max-width:100%}.preview hr{border:0;border-top:1px solid var(--line);margin:2em 0}.preview table{border-collapse:collapse}.preview td,.preview th{border:1px solid var(--line2);padding:6px 8px}
-.mdToggle{position:absolute;right:14px;bottom:14px;z-index:8;width:34px;height:28px;border:1px solid var(--line);border-radius:7px;background:rgba(17,21,24,.9);color:#68727a;font:800 8px/1 var(--mono);cursor:pointer}.mdToggle:hover,.mdToggle.active{color:#eef2f4;border-color:#555f68;background:#1a2025}
-.remoteLayer{position:absolute;inset:0;pointer-events:none;z-index:20;overflow:hidden}.remoteCursor{position:absolute;left:0;top:0;width:13px;height:18px;will-change:transform;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}.remoteCursor svg{width:13px;height:18px;display:block;fill:var(--peer);stroke:rgba(0,0,0,.65);stroke-width:.75}.remoteName{position:absolute;left:10px;top:12px;background:var(--peer);color:#0a0d0f;padding:2px 4px;border-radius:4px;font:800 7px/1 var(--mono);white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis}
+.editorShell{position:absolute;inset:0;overflow:hidden}.editor{position:absolute;inset:0;width:100%;height:100%;resize:none;border:0;outline:0;background:transparent;color:#ededed;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 var(--mono);letter-spacing:-.012em;caret-color:#fff;tab-size:2;overflow:auto}.editor::selection{background:#3a3a3a;color:#fff}.editor::placeholder{color:#3f3f3f}
+.preview{position:absolute;inset:0;overflow:auto;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 system-ui,sans-serif;color:#e5e5e5}.preview[hidden]{display:none}.preview h1,.preview h2,.preview h3{font-family:var(--mono);letter-spacing:-.04em;margin:1.3em 0 .55em}.preview h1{font-size:2em}.preview h2{font-size:1.45em}.preview h3{font-size:1.16em}.preview p{margin:.7em 0}.preview code,.preview pre{font-family:var(--mono);background:#111111;border:1px solid var(--line)}.preview code{padding:.08em .35em;border-radius:4px}.preview pre{padding:14px;overflow:auto;border-radius:6px}.preview pre code{border:0;padding:0;background:transparent}.preview blockquote{margin:1em 0;padding-left:15px;border-left:2px solid #555;color:#b3b3b3}.preview a{color:#d0d0d0}.preview img{max-width:100%}.preview hr{border:0;border-top:1px solid var(--line);margin:2em 0}.preview table{border-collapse:collapse}.preview td,.preview th{border:1px solid var(--line2);padding:6px 8px}
+.mdToggle{position:absolute;right:14px;bottom:14px;z-index:8;width:34px;height:34px;border:1px solid var(--line);border-radius:7px;background:rgba(10,10,10,.94);color:#6d6d6d;font:800 8px/1 var(--mono);cursor:pointer}.mdToggle:hover,.mdToggle.active{color:#efefef;border-color:#5a5a5a;background:#171717}
+.remoteLayer{position:absolute;inset:0;pointer-events:none;z-index:20;overflow:hidden}.remoteCursor{position:absolute;left:0;top:0;width:13px;height:18px;will-change:transform;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}.remoteCursor svg{width:13px;height:18px;display:block;fill:var(--peer);stroke:rgba(0,0,0,.65);stroke-width:.75}.remoteName{position:absolute;left:10px;top:12px;background:var(--peer);color:#090909;padding:2px 4px;border-radius:4px;font:800 7px/1 var(--mono);white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis}
 .syncState{position:absolute;left:12px;bottom:12px;color:#424a51;font:700 7px/1 var(--mono);letter-spacing:.06em;pointer-events:none}.syncState.online{color:#59715f}.syncState.warn{color:#8c6a54}
-.modalBackdrop{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.54);display:grid;place-items:center;padding:20px;backdrop-filter:blur(8px)}.modalBackdrop[hidden]{display:none}.shareCard{width:min(390px,100%);border:1px solid #343c43;background:#111518;border-radius:12px;padding:18px;box-shadow:0 22px 70px rgba(0,0,0,.55)}.shareHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.shareHead strong{font:800 10px/1 var(--mono);letter-spacing:.12em}.shareClose{width:27px;height:27px;border:0;background:transparent;color:#7c858d;font-size:20px;cursor:pointer}.qr{width:210px;height:210px;margin:0 auto 16px;display:grid;place-items:center;background:#fff;border-radius:8px;padding:9px}.qr canvas,.qr img{max-width:100%;max-height:100%}.shareLink{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.shareLink input{min-width:0;height:34px;border:1px solid var(--line2);border-radius:7px;background:#0b0e10;color:#aeb6bc;padding:0 9px;font-size:9px}.copyBtn{height:34px;border:1px solid var(--line2);border-radius:7px;background:#181d21;color:#d9dfe3;padding:0 12px;font-size:9px;cursor:pointer}.shareHint{margin-top:10px;color:#596269;font:600 8px/1.45 var(--mono)}
-.tooltip{position:fixed;z-index:200;pointer-events:none;background:#080a0c;color:#e4e8eb;border:1px solid #333b42;border-radius:5px;padding:5px 7px;font:700 8px/1 var(--mono);white-space:nowrap;opacity:0;transform:translateY(3px);transition:opacity .1s,transform .1s}.tooltip.show{opacity:1;transform:none}
-@media(max-width:700px){:root{--rail:64px;--top:44px}.rail{padding:7px}.pageBlock{width:48px;height:48px}.editor,.preview{padding:24px 20px 80px;font-size:15px}.peers{padding-left:8px}.roomKey{font-size:9px}.topActions{padding-right:5px}.iconBtn{width:30px;height:30px}}
+.modalBackdrop{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.54);display:grid;place-items:center;padding:20px;backdrop-filter:blur(8px)}.modalBackdrop[hidden]{display:none}.shareCard{width:min(390px,100%);border:1px solid #333;background:#0a0a0a;border-radius:12px;padding:18px;box-shadow:0 22px 70px rgba(0,0,0,.55)}.shareHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.shareHead strong{font:800 10px/1 var(--mono);letter-spacing:.12em}.shareClose{width:27px;height:27px;border:0;background:transparent;color:#7f7f7f;font-size:20px;cursor:pointer}.qr{width:210px;height:210px;margin:0 auto 16px;display:grid;place-items:center;background:#fff;border-radius:8px;padding:9px}.qr canvas,.qr img{max-width:100%;max-height:100%}.shareLink{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.shareLink input{min-width:0;height:34px;border:1px solid var(--line2);border-radius:7px;background:#050505;color:#b3b3b3;padding:0 9px;font-size:9px}.copyBtn{height:34px;border:1px solid var(--line2);border-radius:7px;background:#121212;color:#dddddd;padding:0 12px;font-size:9px;cursor:pointer}.shareHint{margin-top:10px;color:#5f5f5f;font:600 8px/1.45 var(--mono)}
+.tooltip{position:fixed;z-index:200;pointer-events:none;background:#050505;color:#e8e8e8;border:1px solid #333;border-radius:5px;padding:5px 7px;font:700 8px/1 var(--mono);white-space:nowrap;opacity:0;transform:translateY(3px);transition:opacity .1s,transform .1s}.tooltip.show{opacity:1;transform:none}
+@media(max-width:700px){:root{--rail:64px;--top:44px}.rail{padding:7px}.pageBlock{width:48px;height:48px}.editor,.preview{padding:24px 20px 80px}.editor,.shareLink input{font-size:16px!important}.peers{padding-left:8px}.roomKey{font-size:9px}.topActions{padding-right:5px}.iconBtn{width:30px;height:30px}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 </head>
@@ -69,6 +69,12 @@ button,textarea,input{font:inherit}button{color:inherit}
 </div>
 <div class="tooltip" id="tooltip"></div>
 <script type="module">
+// Keep the scratchpad at a fixed 1:1 browser scale.
+for(const ev of ['gesturestart','gesturechange','gestureend']){
+  document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
+}
+document.addEventListener('touchmove',e=>{if(e.touches&&e.touches.length>1)e.preventDefault()},{passive:false});
+document.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault()},{passive:false});
 import * as Y from 'https://esm.sh/yjs@13.6.27';
 import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate } from 'https://esm.sh/y-protocols@1.0.6/awareness?deps=yjs@13.6.27';
 import { IndexeddbPersistence } from 'https://esm.sh/y-indexeddb@9.0.12?deps=yjs@13.6.27';
@@ -85,10 +91,33 @@ else if(location.hash.slice(1)!==room)history.replaceState(null,'',location.path
 $('#roomKey').textContent='#'+room;$('#roomKey').title='Copy room link';
 document.title='scratch · '+room;
 
+/* Room-local persistence is intentionally hydrated before any network provider
+   starts. y-indexeddb remains the CRDT update log; the snapshot cache below is
+   a second, room-scoped recovery path that also avoids a missed `synced` event
+   leaving the UI unbound after reload. */
+const ROOM_CACHE_DB='scratch-min-room-cache-v1';
+const ROOM_CACHE_STORE='rooms';
+const ROOM_CACHE_LOCAL='scratch-min-room-snapshot:';
+const ROOM_CACHE_ORIGIN={name:'room-cache'};
+const roomCacheB64=bytes=>{const b=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes),chunk=0x8000;let out='';for(let i=0;i<b.length;i+=chunk)out+=String.fromCharCode(...b.subarray(i,i+chunk));return btoa(out)};
+const roomCacheUnb64=str=>{const raw=atob(String(str||'')),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out};
+function openRoomCacheDb(){return new Promise((resolve,reject)=>{if(!('indexedDB'in window))return reject(new Error('IndexedDB unavailable'));const req=indexedDB.open(ROOM_CACHE_DB,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(ROOM_CACHE_STORE))db.createObjectStore(ROOM_CACHE_STORE,{keyPath:'room'})};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('room cache open failed'))})}
+async function readRoomCache(roomId){let idbRec=null,localRec=null;try{const db=await openRoomCacheDb();idbRec=await new Promise((resolve,reject)=>{const tx=db.transaction(ROOM_CACHE_STORE,'readonly'),req=tx.objectStore(ROOM_CACHE_STORE).get(roomId);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error)});db.close()}catch(_){}try{const raw=localStorage.getItem(ROOM_CACHE_LOCAL+roomId);if(raw){const j=JSON.parse(raw);if(j?.u)localRec={room:roomId,ts:Number(j.ts)||0,update:roomCacheUnb64(j.u)}}}catch(_){}const a=idbRec&&idbRec.update?{room:roomId,ts:Number(idbRec.ts)||0,update:new Uint8Array(idbRec.update)}:null;return !a?localRec:!localRec?a:(localRec.ts>a.ts?localRec:a)}
+async function writeRoomCache(roomId,update,ts=Date.now()){const bytes=update instanceof Uint8Array?update:new Uint8Array(update);try{const db=await openRoomCacheDb();await new Promise((resolve,reject)=>{const tx=db.transaction(ROOM_CACHE_STORE,'readwrite');tx.objectStore(ROOM_CACHE_STORE).put({room:roomId,ts,update:bytes.slice().buffer});tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('room cache aborted'))});db.close()}catch(_){}return bytes}
+function writeRoomCacheLocal(roomId,update,ts=Date.now()){try{const bytes=update instanceof Uint8Array?update:new Uint8Array(update);/* Keep a synchronous unload-safe hot snapshot when it fits comfortably under common localStorage quotas. */if(bytes.byteLength<=1500000)localStorage.setItem(ROOM_CACHE_LOCAL+roomId,JSON.stringify({ts,u:roomCacheB64(bytes)}));else localStorage.removeItem(ROOM_CACHE_LOCAL+roomId)}catch(_){}}
+
 const ydoc=new Y.Doc();
+let roomCacheHydrated=false;
+try{const cached=await readRoomCache(room);if(cached?.update?.byteLength){Y.applyUpdate(ydoc,cached.update,ROOM_CACHE_ORIGIN);roomCacheHydrated=true}}catch(_){}
 const persistence=new IndexeddbPersistence('scratch-min-'+room,ydoc);
+/* Do not rely on a later event listener: wait for y-indexeddb's first replay now. */
+try{await Promise.race([persistence.whenSynced,new Promise(resolve=>setTimeout(resolve,1800))])}catch(_){}
 const awareness=new Awareness(ydoc);
 const pageOrder=ydoc.getArray('page-order');
+let roomCacheTimer=0,roomCacheWriteInFlight=Promise.resolve();
+function snapshotRoomState({syncLocal=false}={}){const update=Y.encodeStateAsUpdate(ydoc),ts=Date.now();if(syncLocal)writeRoomCacheLocal(room,update,ts);roomCacheWriteInFlight=roomCacheWriteInFlight.catch(()=>{}).then(()=>writeRoomCache(room,update,ts));return roomCacheWriteInFlight}
+function scheduleRoomSnapshot(delay=140){clearTimeout(roomCacheTimer);roomCacheTimer=setTimeout(()=>{roomCacheTimer=0;const update=Y.encodeStateAsUpdate(ydoc),ts=Date.now();writeRoomCacheLocal(room,update,ts);roomCacheWriteInFlight=roomCacheWriteInFlight.catch(()=>{}).then(()=>writeRoomCache(room,update,ts))},delay)}
+ydoc.on('update',()=>scheduleRoomSnapshot());
 
 /* Extreme-redundancy discovery fabric. 100 baked candidates are distributed
    across independent failure domains; only bounded deterministic subsets are
@@ -227,7 +256,7 @@ async function relayBroadcast(kind,bytes){await Promise.allSettled([publishNatsR
 
 async function startMesh(){meshRoomName='scratch-v3:'+(await sha256Hex(MESH_APP_ID+':'+room)).slice(0,40);await refreshTurnIce().catch(()=>{});const jobs=[];for(const[name,spec]of Object.entries(MESH_STRATEGIES))for(let shard=0;shard<spec.shards;shard++)jobs.push(joinStrategy(name,shard));jobs.push(startNats(),startNkn(),startMqttRelay(),startNostrRelay());const r=await Promise.allSettled(jobs);meshReady=r.some(x=>x.status==='fulfilled'&&x.value);updateMeshState();return meshReady}
 function stopMesh(){for(const w of meshWrappers.values())try{w.room.leave?.()}catch(_){}meshWrappers.clear();stopNats();stopNkn();stopMqttRelay();stopNostrRelay();try{bc?.close()}catch(_){}meshReady=false}
-window.ScratchMesh={endpointCount:SIGNALING_ENDPOINT_TOTAL,endpoints:SIGNALING_ENDPOINTS,status:()=>Object.fromEntries(meshStatus),routes:()=>[...meshWrappers.values()].map(w=>({name:w.name,strategy:w.strategy,peers:w.peers.size,urls:w.urls||null})),nkn:()=>({connected:nknState.connected,address:nknState.addr,routes:nknState.routes.size,subclients:nknState.client?.readyClientIDs?.().length||0}),nats:()=>({connected:!!natsState.nc,sessions:natsState.sessions.size,relay:!!natsState.relay}),mqtt:()=>({brokers:[...mqttRelayState.ready],topic:mqttRelayState.topic}),nostrRelay:()=>({relays:nostrRelayState.relays,pubkey:nostrRelayState.pubkey}),turn:()=>({servers:storedTurnIce(),policy:rtcConfig().iceTransportPolicy}),setTurn:(iceServers)=>{const v=normalizeIceServers(iceServers);localStorage.setItem('scratch-min-turn-ice',JSON.stringify(v));runtimeTurnIce=v;return v},setTurnCredentialUrl:(url)=>{if(url)localStorage.setItem('scratch-min-turn-url',String(url));else localStorage.removeItem('scratch-min-turn-url');return refreshTurnIce()},forceRelayIce:(on=true)=>{localStorage.setItem('scratch-min-ice-policy',on?'relay':'all');return rtcConfig().iceTransportPolicy}};
+window.ScratchMesh={endpointCount:SIGNALING_ENDPOINT_TOTAL,endpoints:SIGNALING_ENDPOINTS,status:()=>Object.fromEntries(meshStatus),routes:()=>[...meshWrappers.values()].map(w=>({name:w.name,strategy:w.strategy,peers:w.peers.size,urls:w.urls||null})),nkn:()=>({connected:nknState.connected,address:nknState.addr,routes:nknState.routes.size,subclients:nknState.client?.readyClientIDs?.().length||0}),nats:()=>({connected:!!natsState.nc,sessions:natsState.sessions.size,relay:!!natsState.relay}),mqtt:()=>({brokers:[...mqttRelayState.ready],topic:mqttRelayState.topic}),nostrRelay:()=>({relays:nostrRelayState.relays,pubkey:nostrRelayState.pubkey}),turn:()=>({servers:storedTurnIce(),policy:rtcConfig().iceTransportPolicy}),setTurn:(iceServers)=>{const v=normalizeIceServers(iceServers);localStorage.setItem('scratch-min-turn-ice',JSON.stringify(v));runtimeTurnIce=v;return v},setTurnCredentialUrl:(url)=>{if(url)localStorage.setItem('scratch-min-turn-url',String(url));else localStorage.removeItem('scratch-min-turn-url');return refreshTurnIce()},forceRelayIce:(on=true)=>{localStorage.setItem('scratch-min-ice-policy',on?'relay':'all');return rtcConfig().iceTransportPolicy},cache:()=>({room,hydrated:roomCacheHydrated,pageCount:pageOrder.length,activePage,localHot:!!localStorage.getItem(ROOM_CACHE_LOCAL+room)})};
 
 /* Local CRDT updates go out over every healthy discovery plane. Remote updates
    are not echoed back across planes; all clients join the same redundant planes,
@@ -246,12 +275,22 @@ const selfColor=`hsl(${hue.toFixed(1)} 68% 68%)`;
 const selfName='P-'+String(ydoc.clientID.toString(36)).slice(-4).toUpperCase();
 awareness.setLocalStateField('user',{name:selfName,color:selfColor,nknAddr:''});
 awareness.setLocalStateField('page',activePage||null);
-startMesh().catch(()=>updateMeshState());
+let meshBooted=false;
 
 function pageText(id){return ydoc.getText('page:'+id)}
 function uniquePageIds(){const out=[],seen=new Set();for(const id of pageOrder.toArray()){const v=String(id||'');if(v&&!seen.has(v)){seen.add(v);out.push(v)}}return out}
 function dedupePageOrder(){const arr=pageOrder.toArray(),seen=new Set(),remove=[];arr.forEach((id,i)=>{id=String(id||'');if(!id||seen.has(id))remove.push(i);else seen.add(id)});if(remove.length)ydoc.transact(()=>{for(let i=remove.length-1;i>=0;i--)pageOrder.delete(remove[i],1)},'dedupe')}
-function ensureInitialPage(){dedupePageOrder();if(pageOrder.length===0)ydoc.transact(()=>pageOrder.insert(0,['p0']),'init');const ids=uniquePageIds();if(!ids.includes(activePage))setActivePage(ids[0]||'p0')}
+function ensureInitialPage(){
+  dedupePageOrder();
+  if(pageOrder.length===0)ydoc.transact(()=>pageOrder.insert(0,['p0']),'init');
+  const ids=uniquePageIds(),next=ids.includes(activePage)?activePage:(ids[0]||'p0');
+  /* A valid remembered page still has to be bound on reload. Previously this
+     branch did nothing when activePage was already valid, so the rail restored
+     while the textarea stayed blank until that page was clicked manually. */
+  if(activePage!==next||!boundText){setActivePage(next);return}
+  if(boundText!==pageText(next))bindPage(next);
+  queueRenderPages();
+}
 function newPage(){let id;const ids=new Set(uniquePageIds());do{id='p'+randomKey(5).toLowerCase()}while(ids.has(id));ydoc.transact(()=>pageOrder.push([id]),'new-page');setActivePage(id);requestAnimationFrame(()=>$('#editor').focus())}
 function pageLabel(id,index){const raw=pageText(id).toString().trim(),line=(raw.split(/\r?\n/).find(Boolean)||'').replace(/^#{1,6}\s*/,'').trim();return line||`Page ${index+1}`}
 function renderPages(){renderPagesQueued=0;dedupePageOrder();const host=$('#pages'),add=$('#addPage'),ids=uniquePageIds();host.querySelectorAll('.pageBlock:not(.pageAdd)').forEach(x=>x.remove());ids.forEach((id,i)=>{const b=document.createElement('button');b.type='button';b.className='pageBlock'+(id===activePage?' active':'');b.dataset.page=id;b.title=pageLabel(id,i);b.innerHTML=`<span class="pageNo">${String(i+1).padStart(2,'0')}</span><span class="pageLabel"></span>`;b.querySelector('.pageLabel').textContent=pageLabel(id,i).slice(0,8);b.onclick=()=>setActivePage(id);host.appendChild(b)});host.insertBefore(add,host.firstChild)}
@@ -280,10 +319,19 @@ $('#editorShell').addEventListener('pointermove',publishMouse,{passive:true});$(
 
 function renderPeers(){const states=awareness.getStates(),dots=$('#peerDots');dots.replaceChildren();for(const[id,state]of states){const d=document.createElement('span');d.className='peerDot';d.style.background=state.user?.color||`hsl(${(id*137.5)%360} 68% 68%)`;d.title=state.user?.name||'peer';dots.appendChild(d)}const n=states.size||1;$('#peerCount').textContent=n+' peer'+(n===1?'':'s')}
 awareness.on('change',()=>{renderPeers();refreshRemoteCursors();syncNknFromAwareness();updateMeshState()});
-persistence.on('synced',()=>{updateMeshState();setTimeout(()=>{if(!receivedRemoteSync)ensureInitialPage()},1600)});
+persistence.on('synced',()=>{updateMeshState();if(pageOrder.length)ensureInitialPage();scheduleRoomSnapshot(60)});
 pageOrder.observe(()=>{if(pageOrder.length)ensureInitialPage();queueRenderPages()});
 ydoc.on('update',()=>queueRenderPages());
-setTimeout(()=>{if(pageOrder.length)ensureInitialPage()},500);renderPeers();updateMeshState();
+/* Local room state wins the boot race. If a room exists in either cache,
+   display it immediately; only an actually empty local room waits briefly for
+   a remote peer before creating p0. */
+const hadLocalRoomState=pageOrder.length>0;
+if(hadLocalRoomState){ensureInitialPage();/* restore active textarea immediately */}
+renderPeers();updateMeshState();
+meshBooted=true;startMesh().catch(()=>updateMeshState());
+if(!hadLocalRoomState)setTimeout(()=>{if(pageOrder.length===0)ensureInitialPage()},1400);
+/* Persist the post-hydration state once even when there are no edits this run. */
+scheduleRoomSnapshot(80);
 
 function openNewRoom(){const key=randomKey(),u=new URL(location.href);u.hash=key;u.search='';window.open(u.toString(),'_blank','noopener')}
 $('#newRoom').onclick=openNewRoom;
@@ -297,7 +345,10 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape')hideShare()});
 const tooltip=$('#tooltip');let tipTimer=0;
 document.addEventListener('pointerover',e=>{const t=e.target.closest?.('[data-tip]');if(!t)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>{tooltip.textContent=t.dataset.tip;const r=t.getBoundingClientRect();tooltip.style.left=Math.max(6,Math.min(innerWidth-tooltip.offsetWidth-6,r.left+r.width/2-tooltip.offsetWidth/2))+'px';tooltip.style.top=(r.bottom+7)+'px';tooltip.classList.add('show')},300)});document.addEventListener('pointerout',e=>{if(e.target.closest?.('[data-tip]')){clearTimeout(tipTimer);tooltip.classList.remove('show')}});
 window.addEventListener('resize',refreshRemoteCursors,{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshRemoteCursors();else if(cursorRaf){cancelAnimationFrame(cursorRaf);cursorRaf=0}});
-window.addEventListener('beforeunload',()=>{awareness.setLocalStateField('mouse',null);stopMesh();awareness.destroy();persistence.destroy();ydoc.destroy()});
+function flushRoomSnapshotForExit(){try{const update=Y.encodeStateAsUpdate(ydoc),ts=Date.now();writeRoomCacheLocal(room,update,ts);writeRoomCache(room,update,ts).catch(()=>{})}catch(_){}}
+window.addEventListener('pagehide',flushRoomSnapshotForExit,{capture:true});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushRoomSnapshotForExit()},{capture:true});
+window.addEventListener('beforeunload',()=>{flushRoomSnapshotForExit();awareness.setLocalStateField('mouse',null);stopMesh();awareness.destroy();persistence.destroy();ydoc.destroy()});
 </script>
 </body>
 </html>
