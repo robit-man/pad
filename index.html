@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>scratch</title>
+<meta name="application-name" content="PAD">
+<meta name="apple-mobile-web-app-title" content="PAD">
+<meta property="og:title" content="PAD">
+<meta name="twitter:title" content="PAD">
+<title>PAD</title>
 <style>
 :root{
   --bg:#000;--panel:#080808;--panel2:#0e0e0e;--ink:#ededed;--muted:#6f6f6f;
@@ -54,7 +58,7 @@ button,textarea,input{font:inherit}button{color:inherit}
       <textarea class="editor" id="editor" spellcheck="true" autocomplete="off" autocapitalize="sentences" placeholder="write…"></textarea>
       <article class="preview" id="preview" hidden></article>
       <div class="remoteLayer" id="remoteLayer" aria-hidden="true"></div>
-      <button class="mdToggle" id="mdToggle" type="button" data-tip="Markdown preview · Ctrl/⌘ Shift M">MD</button>
+      <button class="mdToggle" id="mdToggle" type="button" data-tip="Markdown preview · Ctrl/⌘ Shift M" data-tip-pos="top">MD</button>
       <div class="syncState" id="syncState">starting</div>
     </div>
   </main>
@@ -89,7 +93,7 @@ let room=cleanKey(location.hash.slice(1));
 if(!room){room=randomKey();history.replaceState(null,'',location.pathname+location.search+'#'+room)}
 else if(location.hash.slice(1)!==room)history.replaceState(null,'',location.pathname+location.search+'#'+room);
 $('#roomKey').textContent='#'+room;$('#roomKey').title='Copy room link';
-document.title='scratch · '+room;
+document.title='PAD · '+room;
 
 /* Room-local persistence is intentionally hydrated before any network provider
    starts. y-indexeddb remains the CRDT update log; the snapshot cache below is
@@ -343,7 +347,7 @@ $('#roomKey').onclick=async()=>{const link=location.href,el=$('#roomKey'),old=el
 window.addEventListener('keydown',e=>{if(e.key==='Escape')hideShare()});
 
 const tooltip=$('#tooltip');let tipTimer=0;
-document.addEventListener('pointerover',e=>{const t=e.target.closest?.('[data-tip]');if(!t)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>{tooltip.textContent=t.dataset.tip;const r=t.getBoundingClientRect();tooltip.style.left=Math.max(6,Math.min(innerWidth-tooltip.offsetWidth-6,r.left+r.width/2-tooltip.offsetWidth/2))+'px';tooltip.style.top=(r.bottom+7)+'px';tooltip.classList.add('show')},300)});document.addEventListener('pointerout',e=>{if(e.target.closest?.('[data-tip]')){clearTimeout(tipTimer);tooltip.classList.remove('show')}});
+document.addEventListener('pointerover',e=>{const t=e.target.closest?.('[data-tip]');if(!t)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>{tooltip.textContent=t.dataset.tip;tooltip.classList.add('show');const r=t.getBoundingClientRect(),gap=7,w=tooltip.offsetWidth,h=tooltip.offsetHeight,left=Math.max(6,Math.min(innerWidth-w-6,r.left+r.width/2-w/2));const preferTop=t.dataset.tipPos==='top',spaceBelow=innerHeight-r.bottom,spaceAbove=r.top;let top;if(preferTop||spaceBelow<h+gap+6&&spaceAbove>spaceBelow)top=r.top-h-gap;else top=r.bottom+gap;top=Math.max(6,Math.min(innerHeight-h-6,top));tooltip.style.left=left+'px';tooltip.style.top=top+'px'},300)});document.addEventListener('pointerout',e=>{if(e.target.closest?.('[data-tip]')){clearTimeout(tipTimer);tooltip.classList.remove('show')}});
 window.addEventListener('resize',refreshRemoteCursors,{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshRemoteCursors();else if(cursorRaf){cancelAnimationFrame(cursorRaf);cursorRaf=0}});
 function flushRoomSnapshotForExit(){try{const update=Y.encodeStateAsUpdate(ydoc),ts=Date.now();writeRoomCacheLocal(room,update,ts);writeRoomCache(room,update,ts).catch(()=>{})}catch(_){}}
 window.addEventListener('pagehide',flushRoomSnapshotForExit,{capture:true});
