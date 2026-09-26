@@ -70,7 +70,7 @@ button,textarea,input{font:inherit}button{color:inherit}
 <div class="tooltip" id="tooltip"></div>
 <script type="module">
 import * as Y from 'https://esm.sh/yjs@13.6.27';
-import { WebrtcProvider } from 'https://esm.sh/y-webrtc@10.3.0?deps=yjs@13.6.27';
+import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate } from 'https://esm.sh/y-protocols@1.0.6/awareness?deps=yjs@13.6.27';
 import { IndexeddbPersistence } from 'https://esm.sh/y-indexeddb@9.0.12?deps=yjs@13.6.27';
 import { marked } from 'https://esm.sh/marked@15.0.7';
 import DOMPurify from 'https://esm.sh/dompurify@3.2.4';
@@ -87,9 +87,54 @@ document.title='scratch · '+room;
 
 const ydoc=new Y.Doc();
 const persistence=new IndexeddbPersistence('scratch-min-'+room,ydoc);
-const provider=new WebrtcProvider('scratch-min-'+room,ydoc,{password:room,signaling:['wss://signaling.yjs.dev'],maxConns:24,filterBcConns:true});
-const awareness=provider.awareness;
+const awareness=new Awareness(ydoc);
 const pageOrder=ydoc.getArray('page-order');
+
+/* The original Scratch transport matrix: three independent WebRTC discovery
+   planes backed by ten explicit public signaling relays. Room data itself is
+   P2P WebRTC; the relays are rendezvous/signaling only. */
+const TRYSTERO_VERSION='0.25.4';
+const MESH_APP_ID='robit-encrypted-scratchpad-v2';
+const MESH_STRATEGIES={
+  nostr:{pkg:'@trystero-p2p/nostr',label:'NOSTR',priority:0},
+  mqtt:{pkg:'@trystero-p2p/mqtt',label:'MQTT',priority:1},
+  torrent:{pkg:'@trystero-p2p/torrent',label:'BITTORRENT',priority:2}
+};
+const MESH_RELAY_URLS={
+  nostr:['wss://nos.lol','wss://nostr.data.haus','wss://relay.mostro.network','wss://relay.primal.net'],
+  mqtt:['wss://test.mosquitto.org:8081/mqtt','wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt'],
+  torrent:['wss://open.ftorrent.com','wss://tracker.webtorrent.dev','wss://tracker.openwebtorrent.com']
+};
+const meshWrappers=new Map(),meshStatus=new Map(),meshModuleCache=new Map();
+let meshRoomName='',meshKey=null,meshReady=false,receivedRemoteSync=false;
+const bc=('BroadcastChannel'in window)?new BroadcastChannel('scratch-min-v2:'+room):null;
+const MESH_REMOTE=Symbol('mesh-remote'),BC_REMOTE=Symbol('bc-remote');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function sha256Hex(v){const b=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(v))));return [...b].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function roomCryptoKey(){if(meshKey)return meshKey;const raw=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('scratch-min-v2:'+room));meshKey=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']);return meshKey}
+async function sealMesh(bytes){bytes=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);const iv=crypto.getRandomValues(new Uint8Array(12)),ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await roomCryptoKey(),bytes)),out=new Uint8Array(12+ct.length);out.set(iv);out.set(ct,12);return out}
+async function openMesh(packet){const b=packet instanceof Uint8Array?packet:new Uint8Array(packet?.buffer||packet);if(b.length<29)throw new Error('short packet');return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(0,12)},await roomCryptoKey(),b.slice(12)))}
+async function importStrategy(pkg){const urls=[`https://cdn.jsdelivr.net/npm/${pkg}@${TRYSTERO_VERSION}/+esm`,`https://esm.run/${pkg}@${TRYSTERO_VERSION}`,`https://esm.sh/${pkg}@${TRYSTERO_VERSION}?bundle`];let last;for(const u of urls){try{const m=await import(u);if(!m.joinRoom)throw new Error('joinRoom export missing');return m}catch(e){last=e}}throw last||new Error('unable to load '+pkg)}
+async function loadStrategy(name){if(meshModuleCache.has(name))return meshModuleCache.get(name);const mod=await importStrategy(MESH_STRATEGIES[name].pkg);meshModuleCache.set(name,mod);return mod}
+function meshPeerRouteCount(){let n=0;for(const w of meshWrappers.values())n+=w.peers.size;return n}
+function meshOnlineCount(){return [...meshStatus.values()].filter(x=>x==='on'||x==='ready'||x==='degraded').length}
+function updateMeshState(){const el=$('#syncState'),online=meshOnlineCount(),peers=Math.max(0,awareness.getStates().size-1);meshReady=online>0;el.textContent=peers?`live · ${peers} peer${peers===1?'':'s'} · ${online}/3`:`mesh ${online}/3 · waiting`;el.className='syncState '+(peers?'online':online?'warn':'');}
+async function meshBroadcast(kind,bytes,except=null){const sealed=await sealMesh(bytes);const sends=[];for(const w of meshWrappers.values()){if(w===except||!w.peers.size)continue;const a=kind==='y'?w.y:w.aw;sends.push(a.send(sealed).catch(()=>{}))}if(bc){try{bc.postMessage({kind,packet:sealed})}catch(_){}}await Promise.allSettled(sends)}
+async function meshSendTo(w,kind,bytes,peerId){try{const sealed=await sealMesh(bytes),a=kind==='y'?w.y:w.aw;await a.send(sealed,{target:peerId})}catch(_){}}
+async function onMeshY(packet,w){try{const update=await openMesh(packet);receivedRemoteSync=true;Y.applyUpdate(ydoc,update,w||MESH_REMOTE);ensureInitialPage()}catch(_){}}
+async function onMeshAw(packet,w){try{const update=await openMesh(packet);applyAwarenessUpdate(awareness,update,w||MESH_REMOTE)}catch(_){}}
+async function joinStrategy(name){const spec=MESH_STRATEGIES[name];meshStatus.set(name,'loading');updateMeshState();try{const mod=await loadStrategy(name),cfg={appId:MESH_APP_ID,relayConfig:{urls:MESH_RELAY_URLS[name],warnOnRelayFailure:false},trickleIce:name!=='torrent'},roomObj=mod.joinRoom(cfg,meshRoomName,{handshakeTimeoutMs:14000,onJoinError:()=>{meshStatus.set(name,'degraded');updateMeshState()}}),w={name,room:roomObj,peers:new Set()};w.y=roomObj.makeAction('scratch-y');w.aw=roomObj.makeAction('scratch-awareness');meshWrappers.set(name,w);w.y.onMessage=(packet)=>onMeshY(packet,w);w.aw.onMessage=(packet)=>onMeshAw(packet,w);roomObj.onPeerJoin=peerId=>{w.peers.add(peerId);meshStatus.set(name,'on');updateMeshState();meshSendTo(w,'y',Y.encodeStateAsUpdate(ydoc),peerId);const clients=[ydoc.clientID];meshSendTo(w,'aw',encodeAwarenessUpdate(awareness,clients),peerId)};roomObj.onPeerLeave=peerId=>{w.peers.delete(peerId);meshStatus.set(name,w.peers.size?'on':'ready');updateMeshState()};meshStatus.set(name,'ready');updateMeshState();return true}catch(_){meshStatus.set(name,'err');updateMeshState();return false}}
+async function startMesh(){meshRoomName='scratch-v2:'+(await sha256Hex(MESH_APP_ID+':'+room)).slice(0,40);const r=await Promise.allSettled(Object.keys(MESH_STRATEGIES).map(joinStrategy));meshReady=r.some(x=>x.status==='fulfilled'&&x.value);updateMeshState();return meshReady}
+function stopMesh(){for(const w of meshWrappers.values())try{w.room.leave?.()}catch(_){}meshWrappers.clear();try{bc?.close()}catch(_){}meshReady=false}
+
+/* Local CRDT updates go out over every healthy discovery plane. Remote updates
+   are not echoed back across planes; all clients join the same redundant planes,
+   which prevents update storms while retaining signaling redundancy. */
+ydoc.on('update',(update,origin)=>{if(origin===BC_REMOTE||meshWrappersHas(origin))return;meshBroadcast('y',update).catch(()=>{})});
+function meshWrappersHas(origin){for(const w of meshWrappers.values())if(w===origin)return true;return false}
+awareness.on('update',({added,updated,removed},origin)=>{if(meshWrappersHas(origin)||origin===BC_REMOTE)return;const ids=[...added,...updated,...removed];if(ids.length)meshBroadcast('aw',encodeAwarenessUpdate(awareness,ids)).catch(()=>{})});
+if(bc){bc.onmessage=e=>{const m=e.data;if(!m?.packet)return;(m.kind==='y'?openMesh(m.packet).then(u=>{receivedRemoteSync=true;Y.applyUpdate(ydoc,u,BC_REMOTE);ensureInitialPage()}):openMesh(m.packet).then(u=>applyAwarenessUpdate(awareness,u,BC_REMOTE))).catch(()=>{})};bc.postMessage({kind:'hello'});const old=bc.onmessage;bc.onmessage=e=>{const m=e.data;if(m?.kind==='hello'){sealMesh(Y.encodeStateAsUpdate(ydoc)).then(packet=>bc.postMessage({kind:'y',packet}));sealMesh(encodeAwarenessUpdate(awareness,[ydoc.clientID])).then(packet=>bc.postMessage({kind:'aw',packet}));return}old(e)}}
+startMesh().catch(()=>updateMeshState());
 const origin={name:'textarea'};
 let activePage=localStorage.getItem('scratch-min-active:'+room)||'';
 let boundText=null,boundObserver=null,lastValue='',previewMode=false,renderPagesQueued=0,inputApplying=false;
@@ -131,12 +176,11 @@ function publishMouse(e){const r=$('#editorShell').getBoundingClientRect();mouse
 $('#editorShell').addEventListener('pointermove',publishMouse,{passive:true});$('#editorShell').addEventListener('pointerleave',()=>awareness.setLocalStateField('mouse',null),{passive:true});
 
 function renderPeers(){const states=awareness.getStates(),dots=$('#peerDots');dots.replaceChildren();for(const[id,state]of states){const d=document.createElement('span');d.className='peerDot';d.style.background=state.user?.color||`hsl(${(id*137.5)%360} 68% 68%)`;d.title=state.user?.name||'peer';dots.appendChild(d)}const n=states.size||1;$('#peerCount').textContent=n+' peer'+(n===1?'':'s')}
-awareness.on('change',()=>{renderPeers();refreshRemoteCursors()});
-provider.on('status',e=>{const el=$('#syncState');el.textContent=e.status==='connected'?'live':'connecting';el.className='syncState '+(e.status==='connected'?'online':'warn')});
-persistence.on('synced',()=>{$('#syncState').textContent='local + sync';$('#syncState').classList.add('online');ensureInitialPage()});
-pageOrder.observe(()=>{ensureInitialPage();queueRenderPages()});
+awareness.on('change',()=>{renderPeers();refreshRemoteCursors();updateMeshState()});
+persistence.on('synced',()=>{updateMeshState();setTimeout(()=>{if(!receivedRemoteSync)ensureInitialPage()},1600)});
+pageOrder.observe(()=>{if(pageOrder.length)ensureInitialPage();queueRenderPages()});
 ydoc.on('update',()=>queueRenderPages());
-setTimeout(ensureInitialPage,900);renderPeers();
+setTimeout(()=>{if(pageOrder.length)ensureInitialPage()},500);renderPeers();updateMeshState();
 
 function openNewRoom(){const key=randomKey(),u=new URL(location.href);u.hash=key;u.search='';window.open(u.toString(),'_blank','noopener')}
 $('#newRoom').onclick=openNewRoom;
@@ -150,7 +194,7 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape')hideShare()});
 const tooltip=$('#tooltip');let tipTimer=0;
 document.addEventListener('pointerover',e=>{const t=e.target.closest?.('[data-tip]');if(!t)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>{tooltip.textContent=t.dataset.tip;const r=t.getBoundingClientRect();tooltip.style.left=Math.max(6,Math.min(innerWidth-tooltip.offsetWidth-6,r.left+r.width/2-tooltip.offsetWidth/2))+'px';tooltip.style.top=(r.bottom+7)+'px';tooltip.classList.add('show')},300)});document.addEventListener('pointerout',e=>{if(e.target.closest?.('[data-tip]')){clearTimeout(tipTimer);tooltip.classList.remove('show')}});
 window.addEventListener('resize',refreshRemoteCursors,{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshRemoteCursors();else if(cursorRaf){cancelAnimationFrame(cursorRaf);cursorRaf=0}});
-window.addEventListener('beforeunload',()=>{awareness.setLocalStateField('mouse',null);provider.destroy();persistence.destroy()});
+window.addEventListener('beforeunload',()=>{awareness.setLocalStateField('mouse',null);stopMesh();awareness.destroy();persistence.destroy();ydoc.destroy()});
 </script>
 </body>
 </html>
