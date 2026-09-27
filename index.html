@@ -27,7 +27,7 @@ button,textarea,input{font:inherit}button{color:inherit}
 .rail{grid-column:1;grid-row:2;min-height:0;border-right:1px solid var(--line);background:#000;padding:10px;overflow-y:auto;scrollbar-width:none}.rail::-webkit-scrollbar{display:none}
 .pages{display:grid;gap:8px}.pageBlock{width:54px;height:54px;border:1px solid var(--line);background:#000;border-radius:8px;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto 1fr;align-content:center;text-align:left;padding:7px;cursor:pointer;overflow:hidden;color:#8d8d8d;transition:.12s;position:relative}.pageBlock:hover{border-color:#4a4a4a;background:#171717;color:#dddddd}.pageBlock.active{background:var(--active);border-color:var(--active);color:var(--activeInk)}.pageNo{grid-column:1;grid-row:1;font:800 8px/1 var(--mono);opacity:.64;align-self:center}.pageLabel{grid-column:1/-1;grid-row:2;align-self:end;font:700 9px/1.15 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}.pageDelete{grid-column:2;grid-row:1;width:15px;height:15px;min-width:15px;padding:0;padding-bottom:2px;border:1px solid currentColor;border-radius:50%;background:transparent;color:inherit;display:grid;place-items:center;font:800 10px/1 var(--mono);cursor:pointer;opacity:.62;transform:translate(2px,-2px)}.pageDelete:hover,.pageDelete:focus-visible{opacity:1;background:var(--activeInk);color:var(--active);outline:none}.pageAdd{display:flex;justify-content:center;align-items:center;padding:0;font-size:24px;font-weight:200;line-height:1;color:var(--active);border-style:dashed}.pageAdd:hover{color:var(--active)}
 .workspace{grid-column:2;grid-row:2;position:relative;min-width:0;min-height:0;background:var(--bg)}
-.editorShell{position:absolute;inset:0;overflow:hidden}.remoteSelections{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}.remoteSelections[hidden]{display:none}.remoteSelectionMirror{position:absolute;left:0;top:0;width:100%;min-height:100%;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 var(--mono);letter-spacing:-.012em;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;color:transparent;tab-size:2;pointer-events:none;will-change:transform}.remoteSelectionMark{color:transparent;background:color-mix(in srgb,var(--peer) 24%,transparent);box-shadow:inset 0 -1px color-mix(in srgb,var(--peer) 58%,transparent);border-radius:2px}.editor{position:absolute;inset:0;z-index:2;width:100%;height:100%;resize:none;border:0;outline:0;background:transparent;color:#ededed;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 var(--mono);letter-spacing:-.012em;caret-color:#fff;tab-size:2;overflow:auto}.editor::selection{background:#3a3a3a;color:#fff}.editor::placeholder{color:#3f3f3f}
+.editorShell{position:absolute;inset:0;overflow:hidden}.markdownLive{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}.markdownLive[hidden]{display:none}.markdownLiveMirror{position:absolute;left:0;top:0;width:100%;min-height:100%;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 var(--mono);letter-spacing:-.012em;color:#ededed;tab-size:2;pointer-events:none;will-change:transform}.markdownLiveMirror .mdLine{display:block;min-height:1.72em;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal}.markdownLiveMirror .mdSyntax{color:transparent}.markdownLiveMirror strong{font-weight:850}.markdownLiveMirror em{font-style:italic}.markdownLiveMirror del{opacity:.64}.markdownLiveMirror .mdInlineCode{background:#111;border-radius:3px;box-shadow:inset 0 0 0 1px #202020}.markdownLiveMirror a{color:#d7d7d7;text-decoration:underline;text-decoration-color:#5d5d5d;text-underline-offset:2px}.markdownLiveMirror .mdHeading{font-weight:850;color:#f4f4f4}.markdownLiveMirror .mdHeading.mdH1{font-weight:900}.markdownLiveMirror .mdQuote{color:#aaa}.markdownLiveMirror .mdListGlyph{color:#bdbdbd}.markdownLiveMirror .mdCodeLine{background:#0b0b0b;color:#cacaca}.markdownLiveMirror .mdRule{color:#414141}.markdownLiveMirror .mdRaw{color:#ededed}.remoteSelections{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:hidden}.remoteSelections[hidden]{display:none}.remoteSelectionMirror{position:absolute;left:0;top:0;width:100%;min-height:100%;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 var(--mono);letter-spacing:-.012em;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;color:transparent;tab-size:2;pointer-events:none;will-change:transform}.remoteSelectionMark{color:transparent;background:color-mix(in srgb,var(--peer) 24%,transparent);box-shadow:inset 0 -1px color-mix(in srgb,var(--peer) 58%,transparent);border-radius:2px}.remoteTextCarets{position:absolute;inset:0;z-index:4;pointer-events:none;overflow:hidden}.remoteTextCaret{position:absolute;width:2px;min-height:16px;background:var(--peer);border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.35);will-change:transform,height}.remoteTextCaretFlag{position:absolute;left:0;top:-15px;max-width:96px;padding:2px 4px;border-radius:4px 4px 4px 0;background:var(--peer);color:#080808;font:800 7px/1 var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 2px rgba(0,0,0,.32)}.editor{position:absolute;inset:0;z-index:3;width:100%;height:100%;resize:none;border:0;outline:0;background:transparent;color:#ededed;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 var(--mono);letter-spacing:-.012em;caret-color:#fff;tab-size:2;overflow:auto}.editor.markdownEnabled{color:transparent}.editor::selection{background:#3a3a3a;color:#fff}.editor.markdownEnabled::selection{background:#3a3a3a;color:transparent}.editor::placeholder{color:#3f3f3f}
 .preview{position:absolute;inset:0;z-index:3;overflow:auto;padding:clamp(22px,4vw,62px) clamp(24px,7vw,108px) 90px;font:400 clamp(15px,1.35vw,19px)/1.72 system-ui,sans-serif;color:#e5e5e5}.preview[hidden]{display:none}.preview h1,.preview h2,.preview h3,.preview h4,.preview h5,.preview h6{font-family:var(--mono);letter-spacing:-.04em;margin:1.3em 0 .55em;line-height:1.22}.preview h1{font-size:2em}.preview h2{font-size:1.45em}.preview h3{font-size:1.16em}.preview h4,.preview h5,.preview h6{font-size:1em}.preview p{margin:.7em 0}.preview ul,.preview ol{margin:.7em 0;padding-left:1.65em}.preview li{margin:.2em 0}.preview strong{font-weight:800}.preview del{opacity:.68}.preview .mdEmpty{color:var(--muted)}.preview code,.preview pre{font-family:var(--mono);background:#111111;border:1px solid var(--line)}.preview code{padding:.08em .35em;border-radius:4px}.preview pre{padding:14px;overflow:auto;border-radius:6px}.preview pre code{border:0;padding:0;background:transparent}.preview blockquote{margin:1em 0;padding-left:15px;border-left:2px solid #555;color:#b3b3b3}.preview a{color:#d0d0d0}.preview img{max-width:100%}.preview hr{border:0;border-top:1px solid var(--line);margin:2em 0}.preview table{border-collapse:collapse}.preview td,.preview th{border:1px solid var(--line2);padding:6px 8px}
 .bottomActions{position:absolute;right:14px;bottom:14px;z-index:8;display:flex;align-items:center;gap:5px}.bottomIconBtn{width:32px;height:32px;padding:0;border:1px solid transparent;border-radius:7px;background:transparent;color:#707070;display:grid;place-items:center;cursor:pointer}.bottomIconBtn:hover,.bottomIconBtn:focus-visible{border-color:var(--line2);background:var(--hover);color:#f2f2f2;outline:none}.bottomIconBtn:disabled{opacity:.24;cursor:default;pointer-events:none}.bottomIconBtn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.mdToggle{border:0!important;background:transparent!important}.mdToggle:hover,.mdToggle:focus-visible,.mdToggle.active{border:0!important;background:transparent!important;color:#efefef}
 .remoteLayer{position:absolute;inset:0;pointer-events:none;z-index:20;overflow:hidden}.remoteCursor{position:absolute;left:0;top:0;width:13px;height:18px;will-change:transform;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}.remoteCursor svg{width:13px;height:18px;display:block;fill:var(--peer);stroke:rgba(0,0,0,.65);stroke-width:.75}.remoteName{position:absolute;left:10px;top:12px;background:var(--peer);color:#090909;padding:2px 4px;border-radius:4px;font:800 7px/1 var(--mono);white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis}
@@ -35,7 +35,7 @@ button,textarea,input{font:inherit}button{color:inherit}
 .syncState{position:absolute;left:12px;bottom:12px;color:#424a51;font:700 7px/1 var(--mono);letter-spacing:.06em;pointer-events:none}.syncState.online{color:#59715f}.syncState.warn{color:#8c6a54}
 .modalBackdrop{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.54);display:grid;place-items:center;padding:20px;backdrop-filter:blur(8px)}.modalBackdrop[hidden]{display:none}.shareCard{width:min(390px,100%);border:1px solid #333;background:#0a0a0a;border-radius:12px;padding:18px;box-shadow:0 22px 70px rgba(0,0,0,.55)}.shareHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.shareHead strong{font:800 10px/1 var(--mono);letter-spacing:.12em}.shareClose{width:27px;height:27px;border:0;background:transparent;color:#7f7f7f;font-size:20px;cursor:pointer}.qr{width:210px;height:210px;margin:0 auto 16px;display:grid;place-items:center;background:#fff;border-radius:8px;padding:9px}.qr canvas,.qr img{max-width:100%;max-height:100%}.shareLink{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.shareLink input{min-width:0;height:34px;border:1px solid var(--line2);border-radius:7px;background:#050505;color:#b3b3b3;padding:0 9px;font-size:9px}.copyBtn{height:34px;border:1px solid var(--line2);border-radius:7px;background:#121212;color:#dddddd;padding:0 12px;font-size:9px;cursor:pointer}.shareHint{margin-top:10px;color:#5f5f5f;font:600 8px/1.45 var(--mono)}
 .tooltip{position:fixed;z-index:200;pointer-events:none;background:#050505;color:#e8e8e8;border:1px solid #333;border-radius:5px;padding:5px 7px;font:700 8px/1 var(--mono);white-space:nowrap;opacity:0;transform:translateY(3px);transition:opacity .1s,transform .1s}.tooltip.show{opacity:1;transform:none}
-@media(max-width:700px){:root{--rail:64px;--top:44px}.rail{padding:7px}.pageBlock{width:48px;height:48px}.editor,.preview,.remoteSelectionMirror{padding:24px 20px 80px}.editor,.remoteSelectionMirror,.shareLink input{font-size:16px!important}.peers{padding-left:8px}.roomKey{font-size:9px}.topActions{padding-right:5px}.iconBtn{width:30px;height:30px}.bottomActions{right:10px;bottom:10px}.bottomIconBtn{width:30px;height:30px}.mediaContext{min-width:164px}.mediaDragHandle{display:grid}}
+@media(max-width:700px){:root{--rail:64px;--top:44px}.rail{padding:7px}.pageBlock{width:48px;height:48px}.editor,.preview,.remoteSelectionMirror,.markdownLiveMirror{padding:24px 20px 80px}.editor,.remoteSelectionMirror,.markdownLiveMirror,.shareLink input{font-size:16px!important}.peers{padding-left:8px}.roomKey{font-size:9px}.topActions{padding-right:5px}.iconBtn{width:30px;height:30px}.bottomActions{right:10px;bottom:10px}.bottomIconBtn{width:30px;height:30px}.mediaContext{min-width:164px}.mediaDragHandle{display:grid}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
 </head>
@@ -56,7 +56,9 @@ button,textarea,input{font:inherit}button{color:inherit}
   <aside class="rail" aria-label="Pages"><div class="pages" id="pages"><button class="pageBlock pageAdd" id="addPage" type="button" aria-label="New page" data-tip="New page">+</button></div></aside>
   <main class="workspace" id="workspace">
     <div class="editorShell" id="editorShell">
+      <div class="markdownLive" id="markdownLive" aria-hidden="true" hidden><div class="markdownLiveMirror" id="markdownLiveMirror"></div></div>
       <div class="remoteSelections" id="remoteSelections" aria-hidden="true"></div>
+      <div class="remoteTextCarets" id="remoteTextCarets" aria-hidden="true"></div>
       <div class="mediaLayer" id="mediaLayer" aria-label="Page media"></div>
       <div class="dropHint" id="dropHint">DROP IMAGE / GIF / VIDEO</div>
       <textarea class="editor" id="editor" spellcheck="true" autocomplete="off" autocapitalize="sentences" placeholder="write…"></textarea>
@@ -69,7 +71,7 @@ button,textarea,input{font:inherit}button{color:inherit}
         <button class="bottomIconBtn" id="redoBtn" type="button" aria-label="Redo" data-tip="Redo · Ctrl/⌘ Shift Z" data-tip-pos="top" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5"/><path d="M19 12h-8a6 6 0 1 0 0 12" transform="translate(0 -6)"/></svg>
         </button>
-        <button class="bottomIconBtn mdToggle" id="mdToggle" type="button" aria-label="Markdown preview" data-tip="Markdown preview · Ctrl/⌘ Shift M" data-tip-pos="top">
+        <button class="bottomIconBtn mdToggle" id="mdToggle" type="button" aria-label="Markdown formatting" data-tip="Markdown formatting · Ctrl/⌘ Shift M" data-tip-pos="top">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17V7l4 6 4-6v10"/><path d="M16 9v8"/><path d="m13.5 14.5 2.5 2.5 2.5-2.5"/></svg>
         </button>
       </div>
@@ -144,6 +146,16 @@ try{await Promise.race([persistence.whenSynced,new Promise(resolve=>setTimeout(r
 const awareness=new Awareness(ydoc);
 const pageOrder=ydoc.getArray('page-order');
 const mediaMap=ydoc.getMap('page-media-v1');
+/* Parallel editor contract: remote Yjs updates are allowed to arrive from every
+   transport continuously, but they are committed to the local Y.Doc as one
+   frame-sized batch and never while the browser owns an IME composition. This
+   is the important megalith behavior: local DOM input and remote CRDT mutation
+   never interleave halfway through one native edit transaction. */
+const REMOTE_EDIT_ORIGIN={name:'remote-edit-batch'};
+let remoteYQueue=[],remoteYFlushTimer=0,isComposing=false,editorInputDepth=0,pendingEditorBookmark=null,deferredEditorReconcile=false;
+function scheduleRemoteYFlush(delay=8){if(remoteYFlushTimer||!remoteYQueue.length||isComposing)return;remoteYFlushTimer=setTimeout(()=>{remoteYFlushTimer=0;flushRemoteYUpdates()},delay)}
+function queueRemoteYUpdate(update){if(!update?.byteLength)return;remoteYQueue.push(update instanceof Uint8Array?update:new Uint8Array(update));if(remoteYQueue.length>64){try{remoteYQueue=[Y.mergeUpdates(remoteYQueue)]}catch(_){remoteYQueue=remoteYQueue.slice(-32)}}scheduleRemoteYFlush(document.visibilityState==='visible'?8:30)}
+function flushRemoteYUpdates(){if(!remoteYQueue.length)return;if(isComposing||editorInputDepth){scheduleRemoteYFlush(12);return}const batch=remoteYQueue.splice(0);let merged;try{merged=batch.length===1?batch[0]:Y.mergeUpdates(batch)}catch(_){return}pendingEditorBookmark=captureEditorBookmark?.()||null;try{Y.applyUpdate(ydoc,merged,REMOTE_EDIT_ORIGIN);receivedRemoteSync=true;ensureInitialPage?.()}catch(e){console.warn('remote CRDT batch rejected',e)}finally{pendingEditorBookmark=null}if(deferredEditorReconcile){deferredEditorReconcile=false;reconcileEditorFromCRDT?.(captureEditorBookmark?.()||null,{force:true})}if(remoteYQueue.length)scheduleRemoteYFlush()}
 let roomCacheTimer=0,roomCacheWriteInFlight=Promise.resolve();
 function snapshotRoomState({syncLocal=false}={}){const update=Y.encodeStateAsUpdate(ydoc),ts=Date.now();if(syncLocal)writeRoomCacheLocal(room,update,ts);roomCacheWriteInFlight=roomCacheWriteInFlight.catch(()=>{}).then(()=>writeRoomCache(room,update,ts));return roomCacheWriteInFlight}
 function scheduleRoomSnapshot(delay=140){clearTimeout(roomCacheTimer);roomCacheTimer=setTimeout(()=>{roomCacheTimer=0;const update=Y.encodeStateAsUpdate(ydoc),ts=Date.now();writeRoomCacheLocal(room,update,ts);roomCacheWriteInFlight=roomCacheWriteInFlight.catch(()=>{}).then(()=>writeRoomCache(room,update,ts))},delay)}
@@ -281,7 +293,7 @@ function meshAction(w,kind){if(!w)return null;if(kind==='y')return w.y;if(kind==
 async function meshBroadcast(kind,bytes,except=null){const sealed=await sealMesh(bytes);const sends=[];for(const w of meshWrappers.values()){if(w===except||!w.peers.size)continue;const a=meshAction(w,kind);if(!a?.send)continue;sends.push(Promise.resolve(a.send(sealed)).catch(()=>{}))}if(bc&&kind!=='asset'){try{bc.postMessage({kind,packet:sealed})}catch(_){}}await Promise.allSettled(sends)}
 async function meshSendTo(w,kind,bytes,peerId){try{const sealed=await sealMesh(bytes),a=meshAction(w,kind);if(!a?.send)return false;await a.send(sealed,{target:peerId});return true}catch(_){return false}}
 async function bridgeMeshPayload(kind,bytes,origin=null){await Promise.allSettled([meshBroadcast(kind,bytes,origin&&typeof origin==='object'?origin:null),relayBroadcast(kind,bytes,origin)])}
-async function onMeshY(packet,w){try{const update=await openMesh(packet);if(meshSeenRecently('y',update))return;receivedRemoteSync=true;Y.applyUpdate(ydoc,update,w||MESH_REMOTE);ensureInitialPage();adaptiveMeshBroadcast('y',update,w||MESH_REMOTE,{repair:false}).catch(()=>{})}catch(_){}}
+async function onMeshY(packet,w){try{const update=await openMesh(packet);if(meshSeenRecently('y',update))return;receivedRemoteSync=true;queueRemoteYUpdate(update);adaptiveMeshBroadcast('y',update,w||MESH_REMOTE,{repair:false}).catch(()=>{})}catch(_){}}
 async function onMeshAw(packet,w){try{const update=await openMesh(packet);if(meshSeenRecently('aw',update))return;applyAwarenessUpdate(awareness,update,w||MESH_REMOTE);adaptiveMeshBroadcast('aw',update,w||MESH_REMOTE,{repair:false}).catch(()=>{})}catch(_){}}
 async function onMeshAssetCtl(packet,w,peerId){try{const bytes=await openMesh(packet);if(meshSeenRecently('assetctl',bytes))return;await handleAssetControlBytes(bytes,w,peerId);adaptiveMeshBroadcast('assetctl',bytes,w||MESH_REMOTE,{repair:false}).catch(()=>{})}catch(_){}}
 async function onMeshAsset(packet,w,peerId){try{const bytes=await openMesh(packet);await receiveAssetChunk(bytes,w,peerId)}catch(_){}}
@@ -321,7 +333,7 @@ function normalizeIceServers(v){if(!Array.isArray(v))return[];return v.filter(x=
 function storedTurnIce(){let out=[];try{out.push(...normalizeIceServers(JSON.parse(localStorage.getItem('scratch-min-turn-ice')||'[]')))}catch(_){}try{out.push(...normalizeIceServers(window.SCRATCH_TURN_ICE||[]))}catch(_){}out.push(...runtimeTurnIce);return out.filter((x,i,a)=>{const k=JSON.stringify(x);return a.findIndex(y=>JSON.stringify(y)===k)===i})}
 async function refreshTurnIce(){const url=window.SCRATCH_TURN_CREDENTIAL_URL||localStorage.getItem('scratch-min-turn-url')||'';if(!url)return runtimeTurnIce;try{const r=await fetch(url,{cache:'no-store',credentials:'omit'});if(!r.ok)throw new Error('TURN credential endpoint '+r.status);const j=await r.json(),arr=Array.isArray(j)?j:(j.iceServers||j.ice_servers||j.servers||[]);runtimeTurnIce=normalizeIceServers(arr);meshStatus.set('turn',runtimeTurnIce.length?'ready':'off')}catch(_){meshStatus.set('turn','err')}updateMeshState();return runtimeTurnIce}
 function rtcConfig(){return{iceServers:[{urls:DEFAULT_STUN_URLS},...storedTurnIce()],iceCandidatePoolSize:8,bundlePolicy:'max-bundle',rtcpMuxPolicy:'require',iceTransportPolicy:localStorage.getItem('scratch-min-ice-policy')==='relay'?'relay':'all'}}
-async function applyRelayPayload(kind,bytes,origin){try{if(meshSeenRecently(kind,bytes))return;if(kind==='y'){receivedRemoteSync=true;Y.applyUpdate(ydoc,bytes,origin);ensureInitialPage()}else if(kind==='aw')applyAwarenessUpdate(awareness,bytes,origin);else if(kind==='assetctl')await handleAssetControlBytes(bytes,null,null);adaptiveMeshBroadcast(kind,bytes,origin,{repair:false}).catch(()=>{})}catch(_){}}
+async function applyRelayPayload(kind,bytes,origin){try{if(meshSeenRecently(kind,bytes))return;if(kind==='y'){receivedRemoteSync=true;queueRemoteYUpdate(bytes)}else if(kind==='aw')applyAwarenessUpdate(awareness,bytes,origin);else if(kind==='assetctl')await handleAssetControlBytes(bytes,null,null);adaptiveMeshBroadcast(kind,bytes,origin,{repair:false}).catch(()=>{})}catch(_){}}
 function isRelayOrigin(origin){return origin===NATS_RELAY_REMOTE||origin===MQTT_RELAY_REMOTE||origin===NOSTR_RELAY_REMOTE}
 function waitIce(pc,timeout=7000){return new Promise(resolve=>{if(pc.iceGatheringState==='complete')return resolve();const done=()=>{clearTimeout(t);pc.removeEventListener('icegatheringstatechange',check);resolve()},check=()=>{if(pc.iceGatheringState==='complete')done()},t=setTimeout(done,timeout);pc.addEventListener('icegatheringstatechange',check)})}
 async function natsSignal(remote,type,payload,session){await natsPublish(natsSubjects(remote).signal,{v:1,type,from:meshActor,to:remote,session,ts:Date.now(),payload,nknAddr:nknState.addr||''})}
@@ -404,10 +416,10 @@ window.ScratchMesh={endpointCount:SIGNALING_ENDPOINT_TOTAL,endpoints:SIGNALING_E
 /* Local CRDT updates go out over every healthy discovery plane. Remote updates
    are not echoed back across planes; all clients join the same redundant planes,
    which prevents update storms while retaining signaling redundancy. */
-ydoc.on('update',(update,origin)=>{if(origin===BC_REMOTE||meshWrappersHas(origin)||isRelayOrigin(origin))return;if(meshSeenRecently('y',update))return;adaptiveMeshBroadcast('y',update,null,{repair:false}).catch(()=>{})});
+ydoc.on('update',(update,origin)=>{if(origin===REMOTE_EDIT_ORIGIN||origin===BC_REMOTE||meshWrappersHas(origin)||isRelayOrigin(origin))return;if(meshSeenRecently('y',update))return;adaptiveMeshBroadcast('y',update,null,{repair:false}).catch(()=>{})});
 function meshWrappersHas(origin){for(const w of meshWrappers.values())if(w===origin)return true;return false}
 awareness.on('update',({added,updated,removed},origin)=>{if(meshWrappersHas(origin)||origin===BC_REMOTE||isRelayOrigin(origin))return;const ids=[...added,...updated,...removed];if(ids.length){const u=encodeAwarenessUpdate(awareness,ids);if(meshSeenRecently('aw',u))return;adaptiveMeshBroadcast('aw',u,null,{repair:false}).catch(()=>{})}});
-if(bc){bc.onmessage=e=>{const m=e.data;if(!m?.packet)return;openMesh(m.packet).then(async u=>{if(meshSeenRecently(m.kind,u))return;if(m.kind==='y'){receivedRemoteSync=true;Y.applyUpdate(ydoc,u,BC_REMOTE);ensureInitialPage()}else if(m.kind==='aw')applyAwarenessUpdate(awareness,u,BC_REMOTE);else if(m.kind==='assetctl')await handleAssetControlBytes(u,null,null);adaptiveMeshBroadcast(m.kind,u,BC_REMOTE,{repair:false}).catch(()=>{})}).catch(()=>{})};bc.postMessage({kind:'hello'});const old=bc.onmessage;bc.onmessage=e=>{const m=e.data;if(m?.kind==='hello'){sealMesh(Y.encodeStateAsUpdate(ydoc)).then(packet=>bc.postMessage({kind:'y',packet}));sealMesh(encodeAwarenessUpdate(awareness,[ydoc.clientID])).then(packet=>bc.postMessage({kind:'aw',packet}));return}old(e)}}
+if(bc){bc.onmessage=e=>{const m=e.data;if(!m?.packet)return;openMesh(m.packet).then(async u=>{if(meshSeenRecently(m.kind,u))return;if(m.kind==='y'){receivedRemoteSync=true;queueRemoteYUpdate(u)}else if(m.kind==='aw')applyAwarenessUpdate(awareness,u,BC_REMOTE);else if(m.kind==='assetctl')await handleAssetControlBytes(u,null,null);adaptiveMeshBroadcast(m.kind,u,BC_REMOTE,{repair:false}).catch(()=>{})}).catch(()=>{})};bc.postMessage({kind:'hello'});const old=bc.onmessage;bc.onmessage=e=>{const m=e.data;if(m?.kind==='hello'){sealMesh(Y.encodeStateAsUpdate(ydoc)).then(packet=>bc.postMessage({kind:'y',packet}));sealMesh(encodeAwarenessUpdate(awareness,[ydoc.clientID])).then(packet=>bc.postMessage({kind:'aw',packet}));return}old(e)}}
 
 setInterval(()=>{const now=Date.now();for(const[k,v]of nknState.chunks)if(now-v.ts>45000)nknState.chunks.delete(k);if(nknState.sendChains.size>64&&!nknState.pendingSends)nknState.sendChains.clear();meshPruneSeen();updateMeshState()},30000);
 
@@ -486,10 +498,11 @@ $('#editor').addEventListener('paste',e=>{const files=[...e.clipboardData?.files
 mediaMap.observe(()=>{scheduleMediaRender();scheduleMissingMedia();if(previewMode)renderMarkdown()});
 setInterval(()=>{const now=Date.now();for(const[h,x]of mediaRx)if(now-x.ts>90000){mediaRx.delete(h);broadcastAssetNeed(h).catch(()=>{})}},30000);
 window.PADMedia={records:()=>mediaRecords(),request:hash=>broadcastAssetNeed(hash),sync:()=>requestMissingMediaAssets(),transfers:()=>({rx:[...mediaRx].map(([hash,x])=>({hash,parts:x.count,total:x.total,bytes:x.bytes})),tx:[...mediaTx.keys()]}),cache:()=>({memory:[...mediaMem.keys()],urls:[...mediaUrls.keys()]})};
+window.PADCollab={remoteQueue:()=>({updates:remoteYQueue.length,composing:isComposing,inputDepth:editorInputDepth,deferred:deferredEditorReconcile}),selection:()=>captureEditorBookmark(),flush:()=>flushRemoteYUpdates()};
 
 const origin={name:'textarea'};
 let activePage=localStorage.getItem('scratch-min-active:'+room)||'';
-let boundText=null,boundObserver=null,lastValue='',previewMode=false,renderPagesQueued=0,inputApplying=false;
+let boundText=null,boundObserver=null,lastValue='',previewMode=false,markdownEnabled=localStorage.getItem('pad-markdown-enabled')==='1',markdownRawLine=-1,renderPagesQueued=0,inputApplying=false;
 const undoManagers=new Map();
 function getUndoManager(id){if(!id)return null;let um=undoManagers.get(id);if(!um){um=new Y.UndoManager(pageText(id),{trackedOrigins:new Set([origin]),captureTimeout:450});const refresh=()=>{if(activePage===id)updateUndoButtons()};for(const ev of ['stack-item-added','stack-item-popped','stack-cleared','stack-item-updated'])um.on(ev,refresh);undoManagers.set(id,um)}return um}
 function updateUndoButtons(){const um=activePage?getUndoManager(activePage):null,undo=$('#undoBtn'),redo=$('#redoBtn');if(undo)undo.disabled=!(um&&(typeof um.canUndo==='function'?um.canUndo():um.undoStack?.length));if(redo)redo.disabled=!(um&&(typeof um.canRedo==='function'?um.canRedo():um.redoStack?.length))}
@@ -524,11 +537,43 @@ function renderPages(){renderPagesQueued=0;dedupePageOrder();const host=$('#page
 function queueRenderPages(){if(renderPagesQueued)return;renderPagesQueued=requestAnimationFrame(renderPages)}
 
 function transformSelection(oldV,newV,start,end){let p=0;const max=Math.min(oldV.length,newV.length);while(p<max&&oldV[p]===newV[p])p++;let so=oldV.length-1,sn=newV.length-1;while(so>=p&&sn>=p&&oldV[so]===newV[sn]){so--;sn--}const del=Math.max(0,so-p+1),ins=Math.max(0,sn-p+1),delta=ins-del;const adjust=v=>v<=p?v:v>=p+del?v+delta:p+ins;return[adjust(start),adjust(end)]}
-function bindPage(id){if(boundText&&boundObserver)boundText.unobserve(boundObserver);boundText=pageText(id);getUndoManager(id);lastValue=boundText.toString();$('#editor').value=lastValue;boundObserver=(ev,tr)=>{const next=boundText.toString();if(next===lastValue)return;const ta=$('#editor'),focused=document.activeElement===ta,[ss,se]=focused?transformSelection(lastValue,next,ta.selectionStart,ta.selectionEnd):[0,0];lastValue=next;inputApplying=true;ta.value=next;inputApplying=false;if(focused){ta.setSelectionRange(Math.max(0,Math.min(next.length,ss)),Math.max(0,Math.min(next.length,se)))}if(previewMode)renderMarkdown();queueRenderPages();refreshRemoteSelections();scheduleMediaPosition();if(focused)scheduleSelectionPublish()};boundText.observe(boundObserver);queueRenderPages();refreshRemoteSelections();scheduleMediaRender();if(previewMode)renderMarkdown()}
-function setActivePage(id){if(!id)return;activePage=id;localStorage.setItem('scratch-min-active:'+room,id);awareness.setLocalStateField('page',id);awareness.setLocalStateField('mouse',null);awareness.setLocalStateField('selection',null);bindPage(id);queueRenderPages();refreshRemoteCursors();refreshRemoteSelections();scheduleMediaRender();scheduleMissingMedia();updateUndoButtons()}
+function captureEditorBookmark(){
+  const ta=$('#editor');if(!boundText||document.activeElement!==ta||!activePage)return null;
+  const len=boundText.length,start=Math.max(0,Math.min(len,ta.selectionStart||0)),end=Math.max(0,Math.min(len,ta.selectionEnd||0)),dir=ta.selectionDirection||'none';
+  const anchor=dir==='backward'?end:start,head=dir==='backward'?start:end;
+  try{return{page:activePage,anchor:Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(boundText,anchor)),head:Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(boundText,head)),dir}}catch(_){return null}
+}
+function resolveBookmarkPoint(bytes){try{const abs=Y.createAbsolutePositionFromRelativePosition(Y.decodeRelativePosition(bytes),ydoc);return abs&&abs.type===boundText?abs.index:null}catch(_){return null}}
+function restoreEditorBookmark(bookmark){
+  const ta=$('#editor');if(!bookmark||bookmark.page!==activePage||document.activeElement!==ta)return false;const a=resolveBookmarkPoint(bookmark.anchor),h=resolveBookmarkPoint(bookmark.head);if(a==null||h==null)return false;const start=Math.min(a,h),end=Math.max(a,h),dir=a>h?'backward':a<h?'forward':bookmark.dir||'none';try{ta.setSelectionRange(start,end,dir);return true}catch(_){return false}
+}
+function afterEditorReconcile(){if(markdownEnabled)renderLiveMarkdown();queueRenderPages();refreshRemoteSelections();scheduleMediaPosition();updateUndoButtons();if(document.activeElement===$('#editor'))scheduleSelectionPublish()}
+function reconcileEditorFromCRDT(bookmark=null,{force=false}={}){
+  if(!boundText)return;const ta=$('#editor'),next=boundText.toString();if(isComposing&&!force){deferredEditorReconcile=true;return}
+  const focused=document.activeElement===ta,oldDom=ta.value,ss=ta.selectionStart||0,se=ta.selectionEnd||0;lastValue=next;inputApplying=true;try{if(oldDom!==next)ta.value=next}finally{inputApplying=false}
+  if(focused&&!restoreEditorBookmark(bookmark)){const[a,b]=transformSelection(oldDom,next,ss,se);try{ta.setSelectionRange(Math.max(0,Math.min(next.length,a)),Math.max(0,Math.min(next.length,b)),ta.selectionDirection||'none')}catch(_){}}
+  afterEditorReconcile()
+}
+function bindPage(id){
+  if(boundText&&boundObserver)boundText.unobserve(boundObserver);boundText=pageText(id);getUndoManager(id);lastValue=boundText.toString();inputApplying=true;$('#editor').value=lastValue;inputApplying=false;
+  boundObserver=(ev,tr)=>{const next=boundText.toString();if(tr.origin===origin){lastValue=next;afterEditorReconcile();return}if(next===lastValue&&$('#editor').value===next)return;if(isComposing||editorInputDepth){deferredEditorReconcile=true;return}reconcileEditorFromCRDT(pendingEditorBookmark||null)};
+  boundText.observe(boundObserver);queueRenderPages();refreshRemoteSelections();scheduleMediaRender();if(markdownEnabled)renderLiveMarkdown()
+}
+function setActivePage(id){if(!id)return;markdownRawLine=-1;activePage=id;localStorage.setItem('scratch-min-active:'+room,id);awareness.setLocalStateField('page',id);awareness.setLocalStateField('mouse',null);awareness.setLocalStateField('selection',null);bindPage(id);queueRenderPages();refreshRemoteCursors();refreshRemoteSelections();scheduleMediaRender();scheduleMissingMedia();updateUndoButtons()}
 
-$('#editor').addEventListener('input',()=>{if(inputApplying||!boundText)return;const next=$('#editor').value,old=lastValue;if(next===old)return;let p=0,max=Math.min(old.length,next.length);while(p<max&&old[p]===next[p])p++;let so=old.length-1,sn=next.length-1;while(so>=p&&sn>=p&&old[so]===next[sn]){so--;sn--}const del=Math.max(0,so-p+1),ins=next.slice(p,sn+1);ydoc.transact(()=>{if(del)boundText.delete(p,del);if(ins)boundText.insert(p,ins)},origin);lastValue=next;if(previewMode)renderMarkdown();queueRenderPages()});
-$('#editor').addEventListener('keydown',e=>{const ta=e.currentTarget,a=ta.selectionStart,b=ta.selectionEnd,mod=e.ctrlKey||e.metaKey,key=e.key.toLowerCase(),wrap=(l,r=l)=>{e.preventDefault();const v=ta.value;ta.setRangeText(l+v.slice(a,b)+r,a,b,'end');ta.selectionStart=a+l.length;ta.selectionEnd=b+l.length;ta.dispatchEvent(new Event('input',{bubbles:true}))};if(mod&&key==='z'){e.preventDefault();e.shiftKey?redoActivePage():undoActivePage()}else if(mod&&key==='y'){e.preventDefault();redoActivePage()}else if(e.key==='Tab'){e.preventDefault();ta.setRangeText('  ',a,b,'end');ta.dispatchEvent(new Event('input',{bubbles:true}))}else if(mod&&key==='b')wrap('**');else if(mod&&key==='i')wrap('_');else if(mod&&key==='k')wrap('[','](url)');else if(mod&&e.shiftKey&&key==='m'){e.preventDefault();togglePreview()}});
+
+function commitEditorInput(){
+  if(inputApplying||!boundText)return;const ta=$('#editor'),next=ta.value,old=lastValue;if(next===old)return;
+  const live=boundText.toString();if(live!==old){reconcileEditorFromCRDT(captureEditorBookmark(),{force:true});return}
+  let p=0,max=Math.min(old.length,next.length);while(p<max&&old[p]===next[p])p++;let so=old.length-1,sn=next.length-1;while(so>=p&&sn>=p&&old[so]===next[sn]){so--;sn--}const del=Math.max(0,so-p+1),ins=next.slice(p,sn+1);
+  editorInputDepth++;try{ydoc.transact(()=>{if(del)boundText.delete(p,del);if(ins)boundText.insert(p,ins)},origin)}finally{editorInputDepth=Math.max(0,editorInputDepth-1)}lastValue=next;
+  if(markdownEnabled){settleMarkdownRawLineIfMoved();renderLiveMarkdown()}queueRenderPages();scheduleSelectionPublish();if(deferredEditorReconcile&&!isComposing){deferredEditorReconcile=false;reconcileEditorFromCRDT(captureEditorBookmark(),{force:true})}if(remoteYQueue.length)scheduleRemoteYFlush(0)
+}
+$('#editor').addEventListener('compositionstart',()=>{isComposing=true;clearTimeout(remoteYFlushTimer);remoteYFlushTimer=0});
+$('#editor').addEventListener('compositionend',()=>{isComposing=false;commitEditorInput();flushRemoteYUpdates();scheduleSelectionPublish();if(markdownEnabled)renderLiveMarkdown()});
+$('#editor').addEventListener('input',()=>{if(isComposing){if(markdownEnabled)renderLiveMarkdown();scheduleSelectionPublish();return}commitEditorInput()});
+$('#editor').addEventListener('keydown',e=>{const ta=e.currentTarget,a=ta.selectionStart,b=ta.selectionEnd,mod=e.ctrlKey||e.metaKey,key=e.key.toLowerCase(),wrap=(l,r=l)=>{e.preventDefault();prepareMarkdownStructuralEdit();const v=ta.value;ta.setRangeText(l+v.slice(a,b)+r,a,b,'end');ta.selectionStart=a+l.length;ta.selectionEnd=b+l.length;ta.dispatchEvent(new Event('input',{bubbles:true}))};if(mod&&key==='z'){e.preventDefault();e.shiftKey?redoActivePage():undoActivePage()}else if(mod&&key==='y'){e.preventDefault();redoActivePage()}else if(e.key==='Tab'){prepareMarkdownStructuralEdit();e.preventDefault();ta.setRangeText('  ',a,b,'end');ta.dispatchEvent(new Event('input',{bubbles:true}))}else if(mod&&key==='b')wrap('**');else if(mod&&key==='i')wrap('_');else if(mod&&key==='k')wrap('[','](url)');else if(mod&&e.shiftKey&&key==='m'){e.preventDefault();togglePreview()}else if(!mod&&(e.key==='Backspace'||e.key==='Delete'||e.key==='Enter'||e.key.length===1)){prepareMarkdownStructuralEdit()}});
+$('#editor').addEventListener('beforeinput',e=>{if(markdownEnabled&&e.inputType&&/^(?:insert|delete)/.test(e.inputType))prepareMarkdownStructuralEdit();scheduleSelectionPublish()});
 
 /* Collaborative text selection awareness. Relative positions keep a remote
    selection attached to the same Y.Text content while concurrent edits land. */
@@ -545,14 +590,15 @@ function decodeSelectionPoint(point,pageId){
 function publishSelection(){
   selectionPublishRaf=0;const ta=$('#editor');
   if(previewMode||document.activeElement!==ta||!activePage||!boundText){awareness.setLocalStateField('selection',null);return}
-  const a=Math.max(0,Math.min(ta.value.length,ta.selectionStart||0)),b=Math.max(0,Math.min(ta.value.length,ta.selectionEnd||0));
-  if(a===b){awareness.setLocalStateField('selection',null);return}
-  awareness.setLocalStateField('selection',{page:activePage,a:encodeSelectionPoint(a),b:encodeSelectionPoint(b),t:Date.now()})
+  const start=Math.max(0,Math.min(ta.value.length,ta.selectionStart||0)),end=Math.max(0,Math.min(ta.value.length,ta.selectionEnd||0)),dir=ta.selectionDirection||'none';
+  const anchor=dir==='backward'?end:start,head=dir==='backward'?start:end;
+  awareness.setLocalStateField('selection',{page:activePage,anchor:encodeSelectionPoint(anchor),head:encodeSelectionPoint(head),a:encodeSelectionPoint(start),b:encodeSelectionPoint(end),dir,focus:true,t:Date.now()})
 }
 function scheduleSelectionPublish(){if(selectionPublishRaf)return;selectionPublishRaf=requestAnimationFrame(publishSelection)}
 for(const ev of ['select','keyup','pointerup','touchend','focus'])$('#editor').addEventListener(ev,scheduleSelectionPublish,{passive:true});
-document.addEventListener('selectionchange',()=>{if(document.activeElement===$('#editor'))scheduleSelectionPublish()},{passive:true});
-$('#editor').addEventListener('blur',()=>awareness.setLocalStateField('selection',null));
+for(const ev of ['keyup','pointerup','touchend'])$('#editor').addEventListener(ev,()=>settleMarkdownRawLineIfMoved(),{passive:true});
+document.addEventListener('selectionchange',()=>{if(document.activeElement===$('#editor')){scheduleSelectionPublish();settleMarkdownRawLineIfMoved()}},{passive:true});
+$('#editor').addEventListener('blur',()=>{awareness.setLocalStateField('selection',null);if(markdownRawLine>=0){markdownRawLine=-1;renderLiveMarkdown()}});
 
 
 function escapeHtml(s){return String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
@@ -589,25 +635,73 @@ function markdownToHtml(src){
   closePara();closeList();if(inCode)out.push('<pre><code>'+escapeHtml(code.join('\n'))+'</code></pre>');
   return out.join('')||'<p class="mdEmpty">Nothing to render yet.</p>'
 }
+function markdownLineIndexAt(text,pos){pos=Math.max(0,Math.min(String(text||'').length,Number(pos)||0));let n=0;for(let i=0;i<pos;i++)if(text.charCodeAt(i)===10)n++;return n}
+function markdownLineTextAt(text,index){return String(text||'').split('\n')[Math.max(0,index)]??''}
+function isStructuralMarkdownLine(line){return /^\s*(?:#{1,6}\s+|>\s?|[-+*]\s+|\d+[.)]\s+|```|~~~|(?:---+|___+|\*\*\*+)\s*$)/.test(String(line||''))}
+function liveMarkdownInline(raw){
+  const stash=[],hold=html=>`\uE000${stash.push(html)-1}\uE001`,syn=x=>`<span class="mdSyntax">${escapeHtml(x)}</span>`;let s=String(raw||'');
+  s=s.replace(/`([^`\n]+)`/g,(_,x)=>hold(`${syn('`')}<span class="mdInlineCode">${escapeHtml(x)}</span>${syn('`')}`));
+  s=s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g,(_,label,url)=>{const href=safeLinkHref(url),tail=`](${url})`;return href?hold(`${syn('[')}<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>${syn(tail)}`):_});
+  const bare=/(^|[\s(])((?:https?:\/\/|www\.)[^\s<]+[^\s<.,!?;:'"\)\]])/gi;
+  s=s.replace(bare,(m,prefix,url)=>{const href=safeLinkHref(url);return href?prefix+hold(`<a href="${escapeHtml(href)}">${escapeHtml(url)}</a>`):m});
+  s=s.replace(/\*\*([^*\n]+)\*\*/g,(_,x)=>hold(`${syn('**')}<strong>${escapeHtml(x)}</strong>${syn('**')}`));
+  s=s.replace(/__([^_\n]+)__/g,(_,x)=>hold(`${syn('__')}<strong>${escapeHtml(x)}</strong>${syn('__')}`));
+  s=s.replace(/~~([^~\n]+)~~/g,(_,x)=>hold(`${syn('~~')}<del>${escapeHtml(x)}</del>${syn('~~')}`));
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,(m,prefix,x)=>prefix+hold(`${syn('*')}<em>${escapeHtml(x)}</em>${syn('*')}`));
+  s=s.replace(/(^|[^_])_([^_\n]+)_/g,(m,prefix,x)=>prefix+hold(`${syn('_')}<em>${escapeHtml(x)}</em>${syn('_')}`));
+  s=escapeHtml(s);return s.replace(/\uE000(\d+)\uE001/g,(_,i)=>stash[Number(i)]||'')
+}
+function liveMarkdownLine(raw,index,inCode){
+  raw=String(raw??'');if(index===markdownRawLine)return{html:`<span class="mdRaw">${escapeHtml(raw)||'&#8203;'}</span>`,inCode};
+  if(/^\s*(?:```|~~~)/.test(raw))return{html:`<span class="mdSyntax">${escapeHtml(raw)||'&#8203;'}</span>`,inCode:!inCode};
+  if(inCode)return{html:`<span class="mdCodeLine">${escapeHtml(raw)||'&#8203;'}</span>`,inCode};
+  let m;
+  if((m=raw.match(/^(\s*)(#{1,6})(\s+)(.*)$/))){const n=m[2].length;return{html:`${escapeHtml(m[1])}<span class="mdSyntax">${escapeHtml(m[2]+m[3])}</span><span class="mdHeading mdH${n}">${liveMarkdownInline(m[4])}</span>`,inCode}}
+  if((m=raw.match(/^(\s*)(>)(\s?)(.*)$/)))return{html:`${escapeHtml(m[1])}<span class="mdSyntax">${escapeHtml(m[2]+m[3])}</span><span class="mdQuote">${liveMarkdownInline(m[4])}</span>`,inCode};
+  if((m=raw.match(/^(\s*)([-+*])(\s+)(.*)$/)))return{html:`${escapeHtml(m[1])}<span class="mdListGlyph">•</span><span class="mdSyntax">${escapeHtml(m[3])}</span>${liveMarkdownInline(m[4])}`,inCode};
+  if((m=raw.match(/^(\s*)(\d+)([.)])(\s+)(.*)$/)))return{html:`${escapeHtml(m[1])}<span class="mdListGlyph">${escapeHtml(m[2]+m[3])}</span>${escapeHtml(m[4])}${liveMarkdownInline(m[5])}`,inCode};
+  if(/^\s*(?:---+|___+|\*\*\*+)\s*$/.test(raw))return{html:`<span class="mdRule">${'─'.repeat(Math.max(1,raw.length))}</span>`,inCode};
+  return{html:liveMarkdownInline(raw)||'&#8203;',inCode}
+}
+function renderLiveMarkdown(){
+  const layer=$('#markdownLive'),host=$('#markdownLiveMirror'),ta=$('#editor');if(!layer||!host||!ta)return;
+  layer.hidden=!markdownEnabled;ta.classList.toggle('markdownEnabled',markdownEnabled);if(!markdownEnabled){host.replaceChildren();return}
+  const src=ta.value??boundText?.toString()??'',lines=String(src).replace(/\r\n?/g,'\n').split('\n');let inCode=false,html='';
+  for(let i=0;i<lines.length;i++){const rendered=liveMarkdownLine(lines[i],i,inCode);inCode=rendered.inCode;html+=`<span class="mdLine" data-md-line="${i}">${rendered.html}</span>`}
+  host.innerHTML=html;syncLiveMarkdownScroll()
+}
+function syncLiveMarkdownScroll(){const ta=$('#editor'),host=$('#markdownLiveMirror');if(!ta||!host)return;host.style.transform=`translate3d(${-ta.scrollLeft}px,${-ta.scrollTop}px,0)`}
+function prepareMarkdownStructuralEdit(){if(!markdownEnabled)return;const ta=$('#editor'),src=ta.value||'',line=markdownLineIndexAt(src,ta.selectionStart||0),raw=markdownLineTextAt(src,line);if(isStructuralMarkdownLine(raw)&&markdownRawLine!==line){markdownRawLine=line;renderLiveMarkdown()}}
+function settleMarkdownRawLineIfMoved(){if(!markdownEnabled||markdownRawLine<0)return;const ta=$('#editor'),line=markdownLineIndexAt(ta.value||'',ta.selectionStart||0);if(line!==markdownRawLine){markdownRawLine=-1;renderLiveMarkdown()}}
+function setMarkdownEnabled(on,{persist=true}={}){markdownEnabled=!!on;previewMode=false;markdownRawLine=-1;$('#preview').hidden=true;$('#editor').hidden=false;$('#remoteSelections').hidden=false;$('#mdToggle').classList.toggle('active',markdownEnabled);$('#mdToggle').setAttribute('aria-pressed',markdownEnabled?'true':'false');$('#mdToggle').setAttribute('aria-label',markdownEnabled?'Disable Markdown formatting':'Enable Markdown formatting');if(persist)try{localStorage.setItem('pad-markdown-enabled',markdownEnabled?'1':'0')}catch(_){}renderLiveMarkdown();refreshRemoteSelections();scheduleMediaRender()}
 function renderMarkdown(){const preview=$('#preview');if(!preview)return;preview.innerHTML=markdownToHtml(injectPreviewMedia(boundText?.toString()||''));hydratePreviewMedia()}
-function togglePreview(force){previewMode=typeof force==='boolean'?force:!previewMode;$('#editor').hidden=previewMode;$('#preview').hidden=!previewMode;$('#remoteSelections').hidden=previewMode;$('#mdToggle').classList.toggle('active',previewMode);$('#mdToggle').setAttribute('aria-pressed',previewMode?'true':'false');if(previewMode){awareness.setLocalStateField('selection',null);renderMarkdown()}else{refreshRemoteSelections();requestAnimationFrame(()=>{$('#editor').focus({preventScroll:true});scheduleSelectionPublish()})}scheduleMediaRender()}
-$('#preview').addEventListener('click',e=>{if(e.target.closest('a,[data-media-id],video,img'))return;togglePreview(false)});
+function togglePreview(force){setMarkdownEnabled(typeof force==='boolean'?force:!markdownEnabled);requestAnimationFrame(()=>{$('#editor').focus({preventScroll:true});scheduleSelectionPublish()})}
+$('#preview').addEventListener('click',e=>{if(e.target.closest('a,[data-media-id],video,img'))return;setMarkdownEnabled(false)});
 $('#undoBtn').onclick=undoActivePage;
 $('#redoBtn').onclick=redoActivePage;
 $('#mdToggle').onclick=()=>togglePreview();
 $('#addPage').onclick=newPage;
 
-const remoteSelections=new Map();
+const remoteSelections=new Map(),remoteTextCarets=new Map();
 function peerColor(id,state){return state?.user?.color||`hsl(${(id*137.5)%360} 68% 68%)`}
 function ensureRemoteSelectionMirror(id,state){let el=remoteSelections.get(id);if(!el){el=document.createElement('div');el.className='remoteSelectionMirror';el.dataset.client=String(id);$('#remoteSelections').appendChild(el);remoteSelections.set(id,el)}el.style.setProperty('--peer',peerColor(id,state));return el}
+function ensureRemoteTextCaret(id,state){let x=remoteTextCarets.get(id);if(!x){const el=document.createElement('div');el.className='remoteTextCaret';el.dataset.client=String(id);const flag=document.createElement('span');flag.className='remoteTextCaretFlag';el.append(flag);$('#remoteTextCarets').appendChild(el);x={el,index:0};remoteTextCarets.set(id,x)}x.el.style.setProperty('--peer',peerColor(id,state));x.el.querySelector('.remoteTextCaretFlag').textContent=state?.user?.name||'peer';return x}
 function syncRemoteSelectionScroll(){const ta=$('#editor'),x=-(ta.scrollLeft||0),y=-(ta.scrollTop||0);for(const el of remoteSelections.values())el.style.transform=`translate3d(${x}px,${y}px,0)`}
-function renderPeerSelection(el,text,start,end){start=Math.max(0,Math.min(text.length,start));end=Math.max(0,Math.min(text.length,end));if(end<start)[start,end]=[end,start];el.replaceChildren();if(start===end)return;el.append(document.createTextNode(text.slice(0,start)));const mark=document.createElement('span');mark.className='remoteSelectionMark';mark.textContent=text.slice(start,end)||'\u200b';el.append(mark,document.createTextNode(text.slice(end)));/* preserve final textarea line box */if(text.endsWith('\n'))el.append(document.createTextNode('\u200b'))}
-function refreshRemoteSelections(){
-  const host=$('#remoteSelections');if(!host||previewMode)return;const states=awareness.getStates(),text=boundText?.toString()||'',alive=new Set;
-  for(const[id,state]of states){if(id===ydoc.clientID)continue;const sel=state.selection;if(state.page!==activePage||sel?.page!==activePage||!sel?.a||!sel?.b)continue;const a=decodeSelectionPoint(sel.a,activePage),b=decodeSelectionPoint(sel.b,activePage);if(a==null||b==null||a===b)continue;const el=ensureRemoteSelectionMirror(id,state);alive.add(id);renderPeerSelection(el,text,a,b)}
-  for(const[id,el]of remoteSelections){if(!alive.has(id)){el.remove();remoteSelections.delete(id)}}syncRemoteSelectionScroll()
+function renderPeerSelection(el,text,start,end){start=Math.max(0,Math.min(text.length,start));end=Math.max(0,Math.min(text.length,end));if(end<start)[start,end]=[end,start];el.replaceChildren();if(start===end)return;el.append(document.createTextNode(text.slice(0,start)));const mark=document.createElement('span');mark.className='remoteSelectionMark';mark.textContent=text.slice(start,end)||'\u200b';el.append(mark,document.createTextNode(text.slice(end)));if(text.endsWith('\n'))el.append(document.createTextNode('\u200b'))}
+function positionRemoteTextCarets(){
+  const ta=$('#editor');if(!ta||!remoteTextCarets.size)return;const entries=[...remoteTextCarets].map(([id,x])=>({id:String(id),index:x.index})),points=measureTextPoints(entries),lh=editorLineHeight();
+  for(const[id,x]of remoteTextCarets){const p=points.get(String(id));if(!p){x.el.hidden=true;continue}const left=p.left-ta.scrollLeft,top=p.top-ta.scrollTop,visible=top+lh>=0&&top<=ta.clientHeight&&left>=-4&&left<=ta.clientWidth+4;x.el.hidden=!visible;if(visible){x.el.style.height=Math.max(16,lh)+'px';x.el.style.transform=`translate3d(${left}px,${top}px,0)`}}
 }
-$('#editor').addEventListener('scroll',()=>{syncRemoteSelectionScroll();refreshRemoteCursors();scheduleMediaPosition()},{passive:true});
+function refreshRemoteSelections(){
+  const host=$('#remoteSelections'),caretHost=$('#remoteTextCarets');if(!host||!caretHost||previewMode)return;const states=awareness.getStates(),text=boundText?.toString()||'',aliveSel=new Set,aliveCaret=new Set,now=Date.now();
+  for(const[id,state]of states){if(id===ydoc.clientID)continue;const sel=state.selection;if(state.page!==activePage||sel?.page!==activePage||Number(sel?.t||0)&&now-Number(sel.t)>35000)continue;
+    const ap=sel?.anchor||sel?.a,hp=sel?.head||sel?.b;if(!ap||!hp)continue;const anchor=decodeSelectionPoint(ap,activePage),head=decodeSelectionPoint(hp,activePage);if(anchor==null||head==null)continue;
+    if(anchor!==head){const el=ensureRemoteSelectionMirror(id,state);aliveSel.add(id);renderPeerSelection(el,text,Math.min(anchor,head),Math.max(anchor,head))}
+    if(sel.focus!==false){const c=ensureRemoteTextCaret(id,state);c.index=Math.max(0,Math.min(text.length,head));aliveCaret.add(id)}
+  }
+  for(const[id,el]of remoteSelections){if(!aliveSel.has(id)){el.remove();remoteSelections.delete(id)}}for(const[id,x]of remoteTextCarets){if(!aliveCaret.has(id)){x.el.remove();remoteTextCarets.delete(id)}}syncRemoteSelectionScroll();positionRemoteTextCarets()
+}
+$('#editor').addEventListener('scroll',()=>{syncRemoteSelectionScroll();positionRemoteTextCarets();syncLiveMarkdownScroll();refreshRemoteCursors();scheduleMediaPosition()},{passive:true});
 
 const remote=new Map();let cursorRaf=0;
 function cursorSvg(){return '<svg viewBox="0 0 13 18"><path d="M1 1v14l3.5-3.4 2.6 5.2 2.2-1.1-2.6-5.1H12z"/></svg><span class="remoteName"></span>'}
@@ -628,7 +722,7 @@ ydoc.on('update',()=>{queueRenderPages();refreshRemoteSelections()});
    a remote peer before creating p0. */
 const hadLocalRoomState=pageOrder.length>0;
 if(hadLocalRoomState){ensureInitialPage();/* restore active textarea immediately */}
-renderPeers();updateMeshState();updateUndoButtons();
+renderPeers();updateMeshState();updateUndoButtons();setMarkdownEnabled(markdownEnabled,{persist:false});
 meshBooted=true;startMesh().then(()=>requestMissingMediaAssets(350)).catch(()=>updateMeshState());scheduleMediaRender();scheduleMissingMedia();
 if(!hadLocalRoomState)setTimeout(()=>{if(pageOrder.length===0)ensureInitialPage()},1400);
 /* Persist the post-hydration state once even when there are no edits this run. */
@@ -645,7 +739,7 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape')hideShare()});
 
 const tooltip=$('#tooltip');let tipTimer=0;
 document.addEventListener('pointerover',e=>{const t=e.target.closest?.('[data-tip]');if(!t)return;clearTimeout(tipTimer);tipTimer=setTimeout(()=>{tooltip.textContent=t.dataset.tip;tooltip.classList.add('show');const r=t.getBoundingClientRect(),gap=7,w=tooltip.offsetWidth,h=tooltip.offsetHeight,left=Math.max(6,Math.min(innerWidth-w-6,r.left+r.width/2-w/2));const preferTop=t.dataset.tipPos==='top',spaceBelow=innerHeight-r.bottom,spaceAbove=r.top;let top;if(preferTop||spaceBelow<h+gap+6&&spaceAbove>spaceBelow)top=r.top-h-gap;else top=r.bottom+gap;top=Math.max(6,Math.min(innerHeight-h-6,top));tooltip.style.left=left+'px';tooltip.style.top=top+'px'},300)});document.addEventListener('pointerout',e=>{if(e.target.closest?.('[data-tip]')){clearTimeout(tipTimer);tooltip.classList.remove('show')}});
-window.addEventListener('resize',()=>{refreshRemoteCursors();refreshRemoteSelections();scheduleMediaRender()},{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshRemoteCursors();else if(cursorRaf){cancelAnimationFrame(cursorRaf);cursorRaf=0}});
+window.addEventListener('resize',()=>{refreshRemoteCursors();refreshRemoteSelections();if(markdownEnabled)renderLiveMarkdown();scheduleMediaRender()},{passive:true});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshRemoteCursors();else if(cursorRaf){cancelAnimationFrame(cursorRaf);cursorRaf=0}});
 function flushRoomSnapshotForExit(){try{const update=Y.encodeStateAsUpdate(ydoc),ts=Date.now();writeRoomCacheLocal(room,update,ts);writeRoomCache(room,update,ts).catch(()=>{})}catch(_){}}
 window.addEventListener('pagehide',flushRoomSnapshotForExit,{capture:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushRoomSnapshotForExit()},{capture:true});
