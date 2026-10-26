@@ -6,67 +6,73 @@ let app;
 before(async () => { app = await startBrowser(); });
 after(async () => { await app?.close(); });
 
-async function room(t, key) {
+async function room(t, key, options) {
   const context = await app.browser.newContext();
   t.after(() => context.close());
-  return { context, ...await app.room(context, key) };
+  return { context, ...await app.room(context, key, options) };
 }
 
-test('rotations await teardown, deduplicate joins, and leave no late work after stopping', async t => {
-  const { page, errors } = await room(t);
-  const result = await page.evaluate(async () => {
-    const a = window.__padTest;
-    const old = a.meshWrappers.get('nostr:0');
-    for (let epoch = 1; epoch <= 8; epoch++) {
-      await Promise.all(Array.from({ length: 8 }, () => a.joinStrategy('nostr', 0, epoch, true)));
-    }
-    const before = { ...window.__mockMesh };
-    old.room.onPeerJoin('late-peer');old.meta.onMessage({ actor: 'late-actor' }, 'late-peer');
-    const stalePeers = old.peers.size, staleRoutes = a.peerRoutes.has('late-actor');
-    await a.rotateIdleStrategies(100);
-    a.stopMesh();
-    await new Promise(r => setTimeout(r, 2300));
-    return { before, after: window.__mockMesh, stalePeers, staleRoutes, wrappers: a.meshWrappers.size, jobs: a.meshStrategyJobs.size, timers: a.meshRotationTimers.size };
+test('idle sessions create no speculative peers and retain healthy sockets without rotating', async t => {
+  const { page, errors }=await room(t);
+  const result=await page.evaluate(async()=>{
+    const a=window.__padTest,now=Date.now,base=now();
+    for(const c of window.__mockMqtt)for(const done of c.pending.splice(0))done();
+    window.__networkOptions.autoAck=true;
+    try{for(let i=0;i<120;i++){Date.now=()=>base+i*15000;await a.meshSupervisorTick();await Promise.all([a.startNats(),a.startMqttRelay(),a.startNostrRelay()])}}finally{Date.now=now}
+    const counts={mqtt:window.__mockMqtt.length,nostr:window.__mockSockets.length,nats:window.__mockNats.length,rtc:window.__rtcCreated};
+    a.stopMesh();await Promise.resolve();
+    return{counts,closed:window.__mockSockets.every(s=>s.readyState===3)&&window.__mockMqtt.every(c=>c.ended),wrappers:a.meshWrappers.size}
   });
-  assert.equal(result.before.joins, 15);
-  assert.equal(result.before.live, 7);
-  assert.equal(result.before.reused, 0);
-  assert.equal(result.before.races, 0);
-  assert.equal(result.stalePeers, 0);
-  assert.equal(result.staleRoutes, false);
-  assert.equal(result.after.live, 0);
-  assert.equal(result.wrappers + result.jobs + result.timers, 0);
-  assert.deepEqual(errors, []);
+  assert.deepEqual(result.counts,{mqtt:2,nostr:2,nats:1,rtc:0});assert.equal(result.closed,true);assert.equal(result.wrappers,0);assert.deepEqual(errors,[])
 });
 
-test('MQTT rotation retires obsolete clients and bounds unacknowledged publications', async t => {
-  const { page, errors } = await room(t);
-  const result = await page.evaluate(async () => {
-    const a = window.__padTest, now = Date.now;
-    let max = 0;
-    try {
-      for (let epoch = 1; epoch <= 30; epoch++) {
-        Date.now = () => epoch * 30000;
-        await Promise.all(Array.from({ length: 5 }, () => a.startMqttRelay()));
-        max = Math.max(max, a.mqttRelayState.clients.size);
-      }
-    } finally { Date.now = now; }
-    for (const [url, c] of a.mqttRelayState.clients) a.mqttRelayState.ready.add(url);
-    await Promise.all(Array.from({ length: 100 }, () => a.publishMqttRelay('hello')));
-    const clients = [...a.mqttRelayState.clients.values()];
-    const pending = clients.map(c => c.pending.length);
-    for (const c of clients) for (const done of c.pending.splice(0)) done();
-    return { max, current: clients.length, pending, retired: window.__mockMqtt.filter(c => c.ended).length,
-      forgottenLive: window.__mockMqtt.filter(c => !c.ended && !clients.includes(c)).length,
-      counters: clients.map(c => c.padPending), limit: a.limits.MQTT_MAX_PENDING };
+test('a sustained outage obeys global and per-endpoint backoff rather than SDK reconnect loops', async t => {
+  const { page, errors }=await room(t,'OUTAGE',{failAll:true});
+  const result=await page.evaluate(async()=>{
+    const a=window.__padTest,now=Date.now,base=now();let peak=0;
+    try{for(let seconds=0;seconds<=1800;seconds+=5){Date.now=()=>base+seconds*1000;await a.meshSupervisorTick();await Promise.all([a.startNats(),a.startMqttRelay(),a.startNostrRelay()]);await Promise.resolve();peak=Math.max(peak,a.mqttRelayState.clients.size+a.nostrRelayState.clients.size+Number(!!a.natsState.nc))}}finally{Date.now=now}
+    const health=Object.values(window.ScratchMesh.endpointHealth());
+    return{health,peak,rtc:window.__rtcCreated,times:[...window.__mockSockets.map(s=>s.time),...window.__mockMqtt.map(c=>c.time),...window.__mockNatsAttempts.map(x=>x.time)].sort((a,b)=>a-b),mqttOptions:window.__mockMqtt.map(c=>c.options.reconnectPeriod),natsOptions:window.__mockNatsAttempts.map(x=>x.options.reconnect)}
   });
-  assert.equal(result.max, 7);
-  assert.equal(result.current, 7);
-  assert.ok(result.retired > 0);
-  assert.equal(result.forgottenLive, 0);
-  assert.ok(result.pending.every(n => n <= result.limit));
-  assert.ok(result.counters.every(n => n === 0));
-  assert.deepEqual(errors, []);
+  assert.ok(result.times.length<50,`${result.times.length} attempts in simulated 30 minute outage`);
+  for(const time of result.times)assert.ok(result.times.filter(t=>t>=time&&t<time+60000).length<=5,'more than five connections per minute');
+  assert.ok(result.mqttOptions.every(x=>x===0));assert.ok(result.natsOptions.every(x=>x===false));
+  assert.ok(result.peak<=5);assert.equal(result.rtc,0);assert.ok(result.health.every(x=>!x.connected&&!x.connecting));assert.deepEqual(errors,[])
+});
+
+test('unacknowledged publications remain bounded and ICE uses at most four server URLs', async t => {
+  const {page,errors}=await room(t);
+  const result=await page.evaluate(async()=>{
+    const a=window.__padTest;
+    await Promise.all(Array.from({length:100},()=>a.publishMqttRelay('hello')));
+    const pending=[...a.mqttRelayState.clients.values()].map(c=>c.pending.length);
+    for(const c of a.mqttRelayState.clients.values())for(const done of c.pending.splice(0))done();
+    window.ScratchMesh.setTurn(Array.from({length:10},(_,i)=>({urls:[`turn:turn${i}.invalid:3478`,`turns:turn${i}.invalid:5349`],username:'user',credential:'pass'})));
+    return{pending,ice:a.rtcConfig().iceServers.flatMap(x=>x.urls),rtc:window.__rtcCreated}
+  });
+  assert.ok(result.pending.every(n=>n<=16));assert.ok(result.ice.length<=4);assert.equal(result.rtc,0);assert.deepEqual(errors,[])
+});
+
+test('real-peer upgrades cap both active WebRTC sessions and failed-peer retries',async t=>{
+  const{page,errors}=await room(t);
+  const result=await page.evaluate(async()=>{
+    const a=window.__padTest,original=window.RTCPeerConnection;let created=0,closed=0;
+    window.RTCPeerConnection=class{
+      iceGatheringState='complete';connectionState='new';
+      constructor(){created++}
+      createDataChannel(){return{readyState:'connecting',bufferedAmount:0,close(){}}}
+      async createOffer(){return{type:'offer',sdp:'test-sdp'}}
+      async setLocalDescription(offer){this.localDescription=offer}
+      close(){closed++;this.connectionState='closed'}
+    };
+    await Promise.all(Array.from({length:100},(_,i)=>a.makeNatsOffer('peer-'+i)));
+    const active=a.natsState.sessions.size;
+    for(const x of [...a.natsState.sessions.values()]){x.pc.connectionState='failed';x.pc.onconnectionstatechange()}
+    await Promise.all(Array.from({length:100},(_,i)=>a.makeNatsOffer('peer-'+i)));
+    window.RTCPeerConnection=original;
+    return{created,closed,active,remaining:a.natsState.sessions.size}
+  });
+  assert.deepEqual(result,{created:4,closed:4,active:4,remaining:0});assert.deepEqual(errors,[])
 });
 
 test('deleted page contents disappear from peers, snapshots, and reloads; legacy orphans are reclaimed', async t => {
@@ -125,36 +131,26 @@ test('text arriving before its page-order update is preserved during deletion cl
   assert.deepEqual(errors, []);
 });
 
-test('late transport startup cannot recreate resources after stop', async t => {
-  const { page, errors } = await room(t);
-  const result = await page.evaluate(async () => {
-    const a = window.__padTest;
-    await a.natsState.nc.close();a.natsState.nc = null;
-    for (const sub of [a.natsState.presence, a.natsState.signal, a.natsState.relay]) sub.unsubscribe();
-    let finish, entered;
-    const ready = new Promise(r => entered = r), pending = new Promise(r => finish = r);
-    a.natsState.module = { wsconnect: () => { entered();return pending; } };
-    const nats = a.startNats();await ready;
-    a.stopNostrRelay();const nostr = a.startNostrRelay();
-    const pools = window.__mockNostr.length;
-    a.stopMesh();
-    let closed = 0;finish({ close: async () => closed++ });
-    const started = await Promise.all([nats, nostr]);
-    return { started, closed, nc: !!a.natsState.nc, pool: !!a.nostrRelayState.pool, newPools: window.__mockNostr.length - pools };
+test('late transport startup cannot recreate resources after stop',async t=>{
+  const{page,errors}=await room(t);
+  const result=await page.evaluate(async()=>{
+    const a=window.__padTest,now=Date.now;
+    await a.natsState.nc.close();a.natsState.nc=null;
+    for(const sub of[a.natsState.presence,a.natsState.signal,a.natsState.relay])sub.unsubscribe();
+    a.endpointReleased('wss://demo.nats.io:8443');Date.now=()=>now()+60001;
+    let finish,entered;const ready=new Promise(r=>entered=r),pending=new Promise(r=>finish=r);
+    a.natsState.module={wsconnect:()=>{entered();return pending}};
+    const job=a.startNats();await ready;a.stopMesh();let closed=0;finish({close:async()=>closed++});const started=await job;Date.now=now;
+    return{started,closed,nc:!!a.natsState.nc,sockets:window.__mockSockets.filter(s=>s.readyState!==3).length}
   });
-  assert.deepEqual(result.started, [false, false]);
-  assert.equal(result.closed, 1);
-  assert.equal(result.nc, false);
-  assert.equal(result.pool, false);
-  assert.equal(result.newPools, 0);
-  assert.deepEqual(errors, []);
+  assert.equal(result.started,false);assert.equal(result.closed,1);assert.equal(result.nc,false);assert.equal(result.sockets,0);assert.deepEqual(errors,[])
 });
 
 test('received media survives cache eviction and an actual page reload', async t => {
   const { page, errors } = await room(t, 'MEDIA');
   const hash = await page.evaluate(async () => {
     const a = window.__padTest;
-    const data = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+    const data = Uint8Array.from(atob((()=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;return canvas.toDataURL('image/png').split(',')[1]})()), c => c.charCodeAt(0));
     const blob = new Blob([data], { type: 'image/png' }), hash = await a.sha256Blob(blob);
     a.mediaMap.set('received', { page: a.activePage, hash, name: 'pixel.png', type: blob.type, size: blob.size, mode: 'freeform', w: 120, h: 90 });
     const half = Math.floor(data.length / 2);
@@ -284,34 +280,29 @@ test('slow snapshot writes coalesce, retain only the active copy, and persist th
   assert.deepEqual(errors, []);
 });
 
-test('expired peers release route maps, wrappers, pending probes and NATS retries; hints cannot keep them alive', async t => {
-  const { page, errors } = await room(t);
-  const result = await page.evaluate(async () => {
-    const a = window.__padTest;
-    const old = Date.now() - a.limits.ROUTE_STALE_MS * 3;
-    for (let i = 0; i < 100; i++) {
-      const actor = 'expired-' + i, addr = 'addr-' + i, w = a.getNknWrapper(addr, actor);
-      w.lastSeen = old;
-      const r = a.peerRoutes.get(actor).get(a.routeKey(w, 'nkn:' + addr));r.lastSeen = old;
-      a.relayActors.set(actor, { lastSeen: old });
-      a.routePending('pending-' + i, 'ping', r);
-      await a.ensureNknRoute(addr, actor);
-    }
-    const healthy = a.getNknWrapper('healthy', 'healthy-actor');
-    let closed = 0, retried = false;
-    a.natsState.sessions.set('expired-nats', { lastSeen: old, retryTimer: setTimeout(() => retried = true, 100), pc: { close() { closed++; } } });
-    a.prunePeerRoutes();
-    await new Promise(r => setTimeout(r, 150));
-    return { actors: [...a.peerRoutes.keys()], wrappers: a.nknState.routes.size, addressActors: a.nknState.actorByAddr.size,
-      relayActors: a.relayActors.size, pending: a.routeBenchPending.size, sessions: a.natsState.sessions.size, closed, retried };
+test('expired peers release route records, fallback wrappers, probes, and retries',async t=>{
+  const{page,errors}=await room(t);
+  const result=await page.evaluate(async()=>{
+    const a=window.__padTest,old=Date.now()-a.limits.ROUTE_STALE_MS*3;
+    for(let i=0;i<100;i++){const actor='expired-'+i,w=a.ensureRelayPeerRoute(actor),r=a.peerRoutes.get(actor).get(a.routeKey(w,w.name));r.lastSeen=old;a.relayActors.set(actor,{lastSeen:old,planes:{}});a.routePending('pending-'+i,'ping',r)}
+    a.ensureRelayPeerRoute('healthy-actor');let closed=0,retried=false;
+    a.natsState.sessions.set('expired-nats',{lastSeen:old,retryTimer:setTimeout(()=>retried=true,100),pc:{close(){closed++}}});
+    a.prunePeerRoutes();await new Promise(r=>setTimeout(r,150));
+    return{actors:[...a.peerRoutes.keys()],wrappers:a.meshWrappers.size,relayActors:a.relayActors.size,pending:a.routeBenchPending.size,sessions:a.natsState.sessions.size,closed,retried}
   });
-  assert.deepEqual(result.actors, ['healthy-actor']);
-  assert.equal(result.wrappers, 1);
-  assert.equal(result.addressActors, 1);
-  assert.equal(result.relayActors, 0);
-  assert.equal(result.pending, 0);
-  assert.equal(result.sessions, 0);
-  assert.equal(result.closed, 1);
-  assert.equal(result.retried, false);
-  assert.deepEqual(errors, []);
+  assert.deepEqual(result.actors,['healthy-actor']);assert.equal(result.wrappers,1);assert.equal(result.relayActors,0);assert.equal(result.pending,0);assert.equal(result.sessions,0);assert.equal(result.closed,1);assert.equal(result.retried,false);assert.deepEqual(errors,[])
+});
+
+test('encrypted relays synchronize text and media without WebRTC or shared browser storage',async t=>{
+  const left=await app.browser.newContext(),right=await app.browser.newContext();t.after(()=>left.close());t.after(()=>right.close());
+  const options={broker:true,noBroadcast:true,autoAck:true};
+  const{page:a,errors:aErrors}=await app.room(left,'RELAY',options),{page:b,errors:bErrors}=await app.room(right,'RELAY',options);
+  await a.locator('#editor').fill('text sent over relay');await a.locator('#editor').dispatchEvent('input');
+  await b.waitForFunction(()=>document.querySelector('#editor').value==='text sent over relay');
+  await a.evaluate(async()=>{
+    const t=window.__padTest,data=Uint8Array.from(atob((()=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;return canvas.toDataURL('image/png').split(',')[1]})()),c=>c.charCodeAt(0)),blob=new Blob([data],{type:'image/png'}),hash=await t.sha256Blob(blob);
+    await t.putMediaBlob(hash,blob);t.mediaMap.set('relayed',{page:t.activePage,hash,name:'pixel.png',type:blob.type,size:blob.size,mode:'freeform',w:120,h:90})
+  });
+  await b.waitForFunction(()=>document.querySelector('.mediaItem img')?.naturalWidth===1);
+  assert.equal(await b.evaluate(()=>window.__rtcCreated),0);assert.deepEqual(aErrors,[]);assert.deepEqual(bErrors,[])
 });

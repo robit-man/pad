@@ -186,143 +186,34 @@ function snapshotRoomState({syncLocal=false}={}){
 function scheduleRoomSnapshot(delay=140){clearTimeout(roomCacheTimer);roomCacheTimer=setTimeout(()=>{roomCacheTimer=0;snapshotRoomState({syncLocal:true}).catch(()=>{})},delay)}
 ydoc.on('update',()=>scheduleRoomSnapshot());
 
-/* Extreme-redundancy discovery fabric. 100 baked candidates are distributed
-   across independent failure domains; only bounded deterministic subsets are
-   live at once so redundancy does not mean 100 permanent sockets. */
-const TRYSTERO_VERSION='0.25.4';
-const NATS_VERSION='3.4.0';
-const NKN_VERSION='1.3.6';
-const NKN_SUBCLIENTS=(matchMedia?.('(pointer:coarse)')?.matches||/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent))?1:2;
-const NKN_BOOTSTRAP_SYNC_MS=60000,NKN_MAX_PENDING_SENDS=24,NKN_CONNECT_WATCHDOG_MS=45000,NKN_RECYCLE_COOLDOWN_MS=90000;
-let nknLoadPromise=null;
-function installNknConsoleGuard(){if(window.__padNknConsoleGuard)return;window.__padNknConsoleGuard=1;const state={sig:new Map(),windowStart:Date.now(),count:0,suppressed:0};const methods=['log','debug','info','warn','error'];const raw={};for(const m of methods)raw[m]=console[m]?.bind(console);const snapshot=v=>{try{if(v instanceof Error)return `${v.name}: ${v.message}`;if(typeof v==='string')return v;if(v==null||['number','boolean','bigint'].includes(typeof v))return String(v);if(v instanceof Uint8Array)return `Uint8Array(${v.byteLength})`;return JSON.stringify(v,(k,x)=>typeof x==='object'&&x!==null?'[object]':x).slice(0,600)}catch(_){return Object.prototype.toString.call(v)}};const noisy=text=>/nkn|rpc call failed|mainnet-rpc|seed rpc|websocket.*(?:close|error|connect)|connect.*node|reconnect/i.test(text);for(const m of methods)console[m]=(...args)=>{const parts=args.map(snapshot),text=parts.join(' ');if(!noisy(text))return raw[m]?.(...args);const now=Date.now();if(now-state.windowStart>60000){state.windowStart=now;state.count=0}const sig=text.replace(/\b\d{2,}\b/g,'#').slice(0,280),x=state.sig.get(sig)||{n:0,t:0};if(now-x.t>30000)x.n=0;x.t=now;x.n++;state.sig.set(sig,x);if(x.n>2||state.count>40){state.suppressed++;return}state.count++;raw[m]?.(`[NKN] ${parts.join(' ')}`)};setInterval(()=>{const cut=Date.now()-120000;for(const[k,v]of state.sig)if(v.t<cut)state.sig.delete(k)},60000);window.PADNknLogs={stats:()=>({signatures:state.sig.size,suppressed:state.suppressed,minuteCount:state.count})}}
-installNknConsoleGuard();
-const MQTTJS_VERSION='5.15.2';
-const NOSTR_TOOLS_VERSION='2.25.2';
+/* Discovery has one owner. Libraries may not reconnect, create speculative
+   peers, or rotate healthy connections behind the endpoint retry budget. */
+const NATS_VERSION='3.4.0',MQTTJS_VERSION='5.15.2',NOSTR_TOOLS_VERSION='2.25.2';
 const MESH_APP_ID='robit-encrypted-scratchpad-v3';
 const enc=new TextEncoder(),dec=new TextDecoder();
-const MESH_STRATEGIES={
-  nostr:{pkg:'@trystero-p2p/nostr',label:'NOSTR',priority:0,shards:3,batch:8},
-  mqtt:{pkg:'@trystero-p2p/mqtt',label:'MQTT',priority:1,shards:2,batch:5},
-  torrent:{pkg:'@trystero-p2p/torrent',label:'BITTORRENT',priority:2,shards:2,batch:5}
-};
 const SIGNALING_ENDPOINTS={
-  nostr:[
-    'wss://nos.lol','wss://relay.damus.io','wss://relay.primal.net','wss://relay.nostr.band','wss://relay.snort.social','wss://nostr.wine','wss://nostr.mom','wss://relay.nostr.bg','wss://nostr-pub.wellorder.net','wss://relay.nostr.info',
-    'wss://nostr-relay.wlvs.space','wss://relay.nostr.com.au','wss://nostr21.com','wss://nostr.fmt.wiz.biz','wss://relay.current.fyi','wss://relay.nostr.wirednet.jp','wss://nostr.oxtr.dev','wss://relay.siamstr.com','wss://relay.noswhere.com','wss://purplepag.es',
-    'wss://relay.nostr.net','wss://offchain.pub','wss://relay.mostr.pub','wss://relay.nostrati.com','wss://relay.notoshi.win','wss://nostr.bitcoiner.social','wss://nostr.einundzwanzig.space','wss://nostr.zebedee.cloud','wss://nostr.data.haus','wss://relay.mostro.network',
-    'wss://relay.nostrgraph.net','wss://nostr.onsats.org','wss://relay.hodl.ar','wss://relay.nostrview.com','wss://nostr-01.yakihonne.com','wss://nostr-02.yakihonne.com','wss://relay.lnfi.network','wss://nostr.mutinywallet.com','wss://relay.nostrplebs.com','wss://relay.nostr.watch',
-    'wss://relay.plebstr.com','wss://relay.nostr.ch','wss://nostr.yael.at','wss://relay.sigit.io','wss://nostr.cercatrova.me','wss://relay.nostr.scot','wss://relay.nostrhub.fr','wss://nostr.noones.com','wss://relay.nostr.au','wss://nostr-relay.app',
-    'wss://relay.amethyst.social','wss://relay.degmods.com','wss://nostr.fry.social','wss://relay.nostraddress.com','wss://relay.nostrcheck.me','wss://relay.illuminodes.com','wss://nostr.rocks','wss://relay.nostr.nu','wss://relay.nostr.place','wss://nostr.easydns.ca'
-  ],
-  mqtt:[
-    'wss://test.mosquitto.org:8081/mqtt','wss://broker.emqx.io:8084/mqtt','wss://broker-cn.emqx.io:8084/mqtt','wss://mqtt.eclipseprojects.io:443/mqtt','wss://broker.hivemq.com:8884/mqtt',
-    'wss://broker.mqttdashboard.com:8884/mqtt','wss://mqtt-dashboard.com:8884/mqtt','wss://public.mqtthq.com:8084/mqtt','wss://mqtt.sandbox.drogue.cloud/mqtt','wss://mqtt.fluux.io:443/mqtt',
-    'wss://broker.scalagent.com:8884/mqtt','wss://test.mosquitto.org:8081/','wss://broker.emqx.io:8084/','wss://broker-cn.emqx.io:8084/','wss://mqtt.eclipseprojects.io:443/'
-  ],
-  torrent:[
-    'wss://tracker.openwebtorrent.com','wss://tracker.webtorrent.dev','wss://tracker.btorrent.xyz','wss://open.ftorrent.com','wss://tracker.files.fm:7073/announce',
-    'wss://tracker.fastcast.nz','wss://tracker.sloppyta.co:443/announce','wss://tracker.novage.com.ua:443/announce','wss://tracker.webtorrent.io','wss://tracker.peer.ooo:443/announce',
-    'wss://tracker.dler.org:443/announce','wss://tracker.imgoingto.icu:443/announce','wss://tracker.kuroy.me:443/announce','wss://tracker.ghostchu-services.top:443/announce','wss://tracker.ipfsscan.io/announce'
-  ],
-  nkn:[
-    'http://seed.nkn.org:30003','http://mainnet-seed-0001.nkn.org:30003','http://mainnet-seed-0002.nkn.org:30003','http://mainnet-seed-0003.nkn.org:30003','http://mainnet-seed-0004.nkn.org:30003','http://mainnet-seed-0005.nkn.org:30003','http://mainnet-seed-0006.nkn.org:30003','http://mainnet-seed-0007.nkn.org:30003','http://mainnet-seed-0008.nkn.org:30003'
-  ],
+  nostr:['wss://nos.lol','wss://relay.damus.io','wss://relay.primal.net'],
+  mqtt:['wss://broker.hivemq.com:8884/mqtt','wss://broker.emqx.io:8084/mqtt'],
   nats:['wss://demo.nats.io:8443']
 };
 const SIGNALING_ENDPOINT_TOTAL=Object.values(SIGNALING_ENDPOINTS).reduce((n,a)=>n+a.length,0);
-if(SIGNALING_ENDPOINT_TOTAL!==100)throw new Error(`signaling candidate invariant failed: ${SIGNALING_ENDPOINT_TOTAL}`);
-const CORE_ENDPOINTS={
-  nostr:['wss://nos.lol','wss://nostr.data.haus','wss://relay.mostro.network','wss://relay.primal.net'],
-  mqtt:['wss://test.mosquitto.org:8081/mqtt','wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt'],
-  torrent:['wss://open.ftorrent.com','wss://tracker.webtorrent.dev','wss://tracker.openwebtorrent.com']
-};
-const meshWrappers=new Map(),meshStatus=new Map(),meshModuleCache=new Map(),meshStrategyJobs=new Map(),meshRotationTimers=new Map();
-let meshGeneration=0,meshSupervisorJob=null,routeProbeJob=null;
+const CONNECT_TIMEOUT_MS=8000,CONNECT_RETRY_MS=60000,CONNECT_MAX_RETRY_MS=15*60000,CONNECT_ATTEMPTS_PER_MINUTE=5;
+const MQTT_RELAY_CLIENTS=2,MQTT_MAX_PENDING=16,NOSTR_RELAY_CLIENTS=2,RTC_MAX_PEERS=4,RTC_MAX_ICE_URLS=4;
+const MESH_RENDEZVOUS_MS=15000,MESH_FULLSYNC_MS=60000,MESH_SEEN_TTL=90000;
+const meshWrappers=new Map(),meshStatus=new Map(),meshEndpointHealth=new Map(),meshPlaneRetryAt=new Map();
+const meshSeen=new Map(),meshHelloReply=new Map(),connectAttempts=[],rtcAttempts=[],rtcRetryAt=new Map();
 const meshActor=crypto.randomUUID?.()||`${randomKey(8)}-${Date.now().toString(36)}`;
-const MESH_RENDEZVOUS_MS=4000,MESH_FULLSYNC_MS=24000,MESH_ROTATE_MS=30000,MESH_SEEN_TTL=90000;
-let meshRoomName='',meshKey=null,meshReady=false,receivedRemoteSync=false,meshSupervisorTimer=0,meshStopped=false,meshEpoch=-1,meshLastFullSync=0,meshLastAwSync=0,meshLastRotate=0;
-const meshSeen=new Map(),meshHelloReply=new Map(),meshEndpointHealth=new Map(),meshPlaneRetryAt=new Map();
-/* Per-device route optimizer. Discovery never stops after the first route:
-   every live plane continues handshaking/probing, while bulk CRDT traffic is
-   promoted to the fastest healthy direct path for each remote actor. */
-const ROUTE_PROBE_MS=7000,ROUTE_BENCH_MS=45000,ROUTE_STALE_MS=26000,ROUTE_BENCH_BYTES=12288;
-const peerRoutes=new Map(),peerPrimaryRoute=new Map(),routeBenchPending=new Map(),routePeerActors=new Map();
-const routeStrategyBase={nats:12,nostr:10,mqtt:10,torrent:10,nkn:0};
-let routeProbeTimer=0;
-function routeKey(w,peerId){return`${w?.name||'route'}|${peerId||'*'}`}
-function actorRouteMap(actor){let m=peerRoutes.get(actor);if(!m){m=new Map;peerRoutes.set(actor,m)}return m}
-function routeActorFor(w,peerId){return routePeerActors.get(routeKey(w,peerId))||w?.actor||''}
-function routeDescriptor(r){return{actor:r.actor,routeId:r.routeId,strategy:r.strategy,peerId:r.peerId,rtt:Number.isFinite(r.rtt)?Math.round(r.rtt):null,bps:Math.round(r.bps||0),score:Math.round(r.score||0),primary:peerPrimaryRoute.get(r.actor)===r.routeId,lastSeen:r.lastSeen,probes:r.probes||0,failures:r.failures||0}}
-function routeScore(r){const fresh=Date.now()-r.lastSeen<ROUTE_STALE_MS;if(!fresh)return-Infinity;const base=routeStrategyBase[r.strategy]||120,rtt=Number.isFinite(r.rtt)?r.rtt:900,bps=Math.max(1,r.bps||24000);return base+Math.log2(bps)*64-Math.min(2500,rtt)*.42-(r.failures||0)*18}
-function recomputePrimaryRoute(actor){const m=peerRoutes.get(actor);if(!m?.size){peerPrimaryRoute.delete(actor);return null}const previousId=peerPrimaryRoute.get(actor),previous=previousId&&m.get(previousId);let best=null;for(const r of m.values()){r.score=routeScore(r);if(!best||r.score>best.score)best=r}if(previous&&Number.isFinite(previous.score)&&Date.now()-previous.lastSeen<ROUTE_STALE_MS&&best&&best!==previous&&best.score<previous.score+18)best=previous;if(best&&Number.isFinite(best.score)){peerPrimaryRoute.set(actor,best.routeId);for(const r of m.values())r.primary=r===best;if(previousId!==best.routeId)queueMicrotask(()=>updateMeshState());return best}peerPrimaryRoute.delete(actor);if(previousId)queueMicrotask(()=>updateMeshState());return null}
-function registerPeerRoute(actor,w,peerId,strategy=w?.strategy||'unknown',received=true){
-  actor=String(actor||'');if(!actor||actor===meshActor||!w)return null;const rid=routeKey(w,peerId),m=actorRouteMap(actor);let r=m.get(rid);
-  if(!r){r={actor,routeId:rid,strategy,wrapper:w,peerId,lastSeen:Date.now(),lastProbe:0,lastBench:0,rtt:Infinity,bps:0,score:0,probes:0,failures:0,primary:false};m.set(rid,r)}else{r.wrapper=w;r.peerId=peerId;r.strategy=strategy;if(received)r.lastSeen=Date.now()}
-  routePeerActors.set(rid,actor);w.actor=actor;recomputePrimaryRoute(actor);routeHello(r).catch(()=>{});return r
-}
-function unregisterWrapperRoutes(w,peerId=null){
-  for(const[token,x]of routeBenchPending)if(x.r.wrapper===w&&(peerId==null||x.r.peerId===peerId)){clearTimeout(x.timer);routeBenchPending.delete(token);x.resolve(false)}
-  for(const[actor,m]of peerRoutes){for(const[rid,r]of m)if(r.wrapper===w&&(peerId==null||r.peerId===peerId)){m.delete(rid);routePeerActors.delete(rid)}if(!m.size){peerRoutes.delete(actor);peerPrimaryRoute.delete(actor)}else recomputePrimaryRoute(actor)}
-}
-function primaryRouteFor(actor){const id=peerPrimaryRoute.get(actor),r=id&&peerRoutes.get(actor)?.get(id);if(r&&Date.now()-r.lastSeen<ROUTE_STALE_MS)return r;return recomputePrimaryRoute(actor)}
-function healthyRoutesFor(actor){return[...(peerRoutes.get(actor)?.values()||[])].filter(r=>Date.now()-r.lastSeen<ROUTE_STALE_MS).sort((a,b)=>routeScore(b)-routeScore(a))}
-async function routeControlSend(r,obj){if(!r?.wrapper?.ctl)return false;try{const packet=await sealMesh(enc.encode(JSON.stringify({...obj,from:meshActor,to:r.actor,ts:Date.now()})));await r.wrapper.ctl.send(packet,{target:r.peerId});return true}catch(_){r.failures=(r.failures||0)+1;recomputePrimaryRoute(r.actor);return false}}
-async function routeHello(r){if(!r||Date.now()-r.lastProbe<1200)return;r.lastProbe=Date.now();await routeControlSend(r,{t:'hello',route:r.routeId,nknAddr:nknState?.addr||''})}
-function routePending(token,kind,r,bytes=0){return new Promise(resolve=>{const timer=setTimeout(()=>{routeBenchPending.delete(token);r.failures=(r.failures||0)+1;recomputePrimaryRoute(r.actor);resolve(false)},5000);routeBenchPending.set(token,{kind,r,t0:performance.now(),bytes,resolve,timer})})}
-async function routeProbe(r,withBench=false){if(!r||Date.now()-r.lastSeen>ROUTE_STALE_MS)return false;r.probes=(r.probes||0)+1;r.lastProbe=Date.now();const token=(crypto.randomUUID?.()||randomKey(8));const wait=routePending(token,'ping',r);await routeControlSend(r,{t:'ping',token});const ok=await wait;if(ok&&withBench){const bt=(crypto.randomUUID?.()||randomKey(8)),pad='x'.repeat(ROUTE_BENCH_BYTES),bw=routePending(bt,'bench',r,ROUTE_BENCH_BYTES);r.lastBench=Date.now();await routeControlSend(r,{t:'bench',token:bt,pad});await bw}recomputePrimaryRoute(r.actor);return ok}
-async function handleRouteControl(packet,w,peerId){try{const msg=JSON.parse(dec.decode(await openMesh(packet)));if(!msg?.from||msg.from===meshActor||msg.to&&msg.to!==meshActor)return;const r=registerPeerRoute(msg.from,w,peerId,w.strategy);if(!r)return;r.lastSeen=Date.now();r.failures=Math.max(0,(r.failures||0)-.15);if(msg.nknAddr)ensureNknRoute(msg.nknAddr,msg.from).catch(()=>{});
-  if(msg.t==='hello'){await routeControlSend(r,{t:'hello-ack',echo:msg.ts});return}
-  if(msg.t==='hello-ack'){if(msg.echo)r.rtt=Math.min(r.rtt,Math.max(.1,Date.now()-msg.echo));if(!r.bps||Date.now()-r.lastBench>ROUTE_BENCH_MS)routeProbe(r,true).catch(()=>{});recomputePrimaryRoute(r.actor);return}
-  if(msg.t==='ping'){await routeControlSend(r,{t:'pong',token:msg.token});return}
-  if(msg.t==='pong'){const x=routeBenchPending.get(msg.token);if(x?.kind==='ping'){clearTimeout(x.timer);routeBenchPending.delete(msg.token);const dt=Math.max(.1,performance.now()-x.t0);x.r.rtt=Number.isFinite(x.r.rtt)?x.r.rtt*.65+dt*.35:dt;x.r.lastSeen=Date.now();x.resolve(true);recomputePrimaryRoute(x.r.actor)}return}
-  if(msg.t==='bench'){await routeControlSend(r,{t:'bench-ack',token:msg.token,bytes:String(msg.pad||'').length});return}
-  if(msg.t==='bench-ack'){const x=routeBenchPending.get(msg.token);if(x?.kind==='bench'){clearTimeout(x.timer);routeBenchPending.delete(msg.token);const dt=Math.max(1,performance.now()-x.t0),n=Math.max(x.bytes,Number(msg.bytes)||0);x.r.bps=n*1000/dt;x.r.lastSeen=Date.now();x.resolve(true);recomputePrimaryRoute(x.r.actor)}return}
-}catch(_){}}
-function prunePeerRoutes(now=Date.now()){
-  for(const[actor,m]of peerRoutes){
-    for(const[rid,r]of m)if(now-r.lastSeen>ROUTE_STALE_MS*2){
-      m.delete(rid);routePeerActors.delete(rid);
-      for(const[token,x]of routeBenchPending)if(x.r===r){clearTimeout(x.timer);routeBenchPending.delete(token);x.resolve(false)}
-    }
-    if(!m.size){peerRoutes.delete(actor);peerPrimaryRoute.delete(actor)}else recomputePrimaryRoute(actor)
-  }
-  for(const[addr,w]of nknState.routes)if(now-w.lastSeen>ROUTE_STALE_MS*2)removeNknRoute(addr);
-  for(const[actor,x]of natsState.sessions)if(now-x.lastSeen>ROUTE_STALE_MS*2)closeNatsPeer(actor);
-  for(const[actor,x]of relayActors)if(now-x.lastSeen>45000&&!peerRoutes.has(actor))relayActors.delete(actor)
-}
-function probeAllPeerRoutes(){
-  if(routeProbeJob)return routeProbeJob;
-  const job=(async()=>{const now=Date.now();prunePeerRoutes(now);const jobs=[];
-    for(const m of peerRoutes.values())for(const r of m.values())if(now-r.lastProbe>=ROUTE_PROBE_MS)jobs.push(routeProbe(r,!r.bps||now-r.lastBench>ROUTE_BENCH_MS));
-    await Promise.allSettled(jobs);for(const actor of peerRoutes.keys())recomputePrimaryRoute(actor)
-  })().finally(()=>{if(routeProbeJob===job)routeProbeJob=null});
-  routeProbeJob=job;return job
-}
-function knownRemoteActors(){return new Set([...relayActors.keys(),...peerRoutes.keys()])}
-async function adaptiveDirectBroadcast(kind,bytes,{origin=null,repair=false}={}){
-  const actors=knownRemoteActors(),covered=new Set(),jobs=[];for(const actor of actors){const routes=healthyRoutesFor(actor);if(!routes.length)continue;const primary=routes[0];jobs.push(meshSendTo(primary.wrapper,kind,bytes,primary.peerId).then(ok=>{if(ok)covered.add(actor);else{primary.failures=(primary.failures||0)+1;recomputePrimaryRoute(actor)}}));if(repair&&routes[1])jobs.push(meshSendTo(routes[1].wrapper,kind,bytes,routes[1].peerId));else if(kind==='aw'&&routes[1])jobs.push(meshSendTo(routes[1].wrapper,kind,bytes,routes[1].peerId))}
-  if(bc){try{bc.postMessage({kind,packet:await sealMesh(bytes)})}catch(_){}}
-  await Promise.allSettled(jobs);return{actors,covered}
-}
-async function adaptiveMeshBroadcast(kind,bytes,origin=null,{repair=false}={}){
-  const direct=await adaptiveDirectBroadcast(kind,bytes,{origin,repair});const noActorRoutes=!direct.actors.size||direct.covered.size<direct.actors.size;
-  /* Relay planes remain hot as a repair/fallback channel. Bulk updates use them
-     only if a peer lacks a promoted direct route; periodic repair sync uses them. */
-  if(noActorRoutes||repair||kind==='aw')await relayBroadcast(kind,bytes,origin);if(!direct.covered.size){const ow=origin&&typeof origin==='object'?origin:null;await meshBroadcast(kind,bytes,ow)}
-}
-
+let meshRoomName='',meshKey=null,meshReady=false,receivedRemoteSync=false,meshStopped=false,meshGeneration=0;
+let meshSupervisorTimer=0,meshSupervisorJob=null,routeProbeTimer=0,routeProbeJob=null,meshLastFullSync=0,meshLastAwSync=0;
+const ROUTE_PROBE_MS=15000,ROUTE_BENCH_MS=60000,ROUTE_STALE_MS=45000,ROUTE_BENCH_BYTES=1024;
+const peerRoutes=new Map(),peerPrimaryRoute=new Map(),routeBenchPending=new Map(),routePeerActors=new Map(),relayActors=new Map();
+const routeStrategyBase={nats:100,relay:-1000};
 const bc=('BroadcastChannel'in window)?new BroadcastChannel('scratch-min-v3:'+room):null;
 const MESH_REMOTE=Symbol('mesh-remote'),BC_REMOTE=Symbol('bc-remote'),NATS_RELAY_REMOTE=Symbol('nats-relay'),MQTT_RELAY_REMOTE=Symbol('mqtt-relay'),NOSTR_RELAY_REMOTE=Symbol('nostr-relay');
 let runtimeTurnIce=[];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const hash32=v=>{let h=2166136261;for(let i=0;i<String(v).length;i++){h^=String(v).charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0};
-function meshEpochNow(){return Math.floor(Date.now()/MESH_ROTATE_MS)}
-function pickCandidates(kind,count,shard=0,epoch=meshEpochNow()){const all=[...new Set(SIGNALING_ENDPOINTS[kind]||[])],core=CORE_ENDPOINTS[kind]||[],rest=all.filter(x=>!core.includes(x)).sort((a,b)=>hash32(`${room}|${kind}|${a}`)-hash32(`${room}|${kind}|${b}`));const span=Math.max(1,count-core.length),offset=rest.length?((epoch*span*MESH_STRATEGIES[kind]?.shards||epoch*span)+(shard*span))%rest.length:0,shifted=rest.length?rest.slice(offset).concat(rest.slice(0,offset)):[];return [...new Set([...core,...shifted])].slice(0,Math.min(count,all.length))}
 function meshByteFingerprint(kind,bytes){const b=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes),step=Math.max(1,Math.floor(b.length/96));let h=2166136261;for(let i=0;i<b.length;i+=step){h^=b[i];h=Math.imul(h,16777619)}h^=b.length;h=Math.imul(h,16777619);return `${kind}:${b.length}:${h>>>0}`}
-function meshSeenRecently(kind,bytes,mark=true){const key=meshByteFingerprint(kind,bytes),now=Date.now(),t=meshSeen.get(key)||0;if(mark)meshSeen.set(key,now);return now-t<MESH_SEEN_TTL}
-function meshPruneSeen(){const cut=Date.now()-MESH_SEEN_TTL;for(const[k,t]of meshSeen)if(t<cut)meshSeen.delete(k);for(const[k,t]of meshHelloReply)if(t<cut)meshHelloReply.delete(k)}
-function markEndpoint(url,state){const x=meshEndpointHealth.get(url)||{attempts:0,success:0,fail:0,lastAttempt:0,lastSuccess:0,lastFailure:0};x.attempts++;x.lastAttempt=Date.now();if(state==='ok'){x.success++;x.lastSuccess=Date.now()}else if(state==='fail'){x.fail++;x.lastFailure=Date.now()}meshEndpointHealth.set(url,x)}
 async function sha256Hex(v){const b=new Uint8Array(await crypto.subtle.digest('SHA-256',enc.encode(String(v))));return [...b].map(x=>x.toString(16).padStart(2,'0')).join('')}
 async function roomCryptoKey(){if(meshKey)return meshKey;const raw=await crypto.subtle.digest('SHA-256',enc.encode('scratch-min-v3:'+room));meshKey=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt']);return meshKey}
 async function sealMesh(bytes){bytes=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);const iv=crypto.getRandomValues(new Uint8Array(12)),ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await roomCryptoKey(),bytes)),out=new Uint8Array(12+ct.length);out.set(iv);out.set(ct,12);return out}
@@ -331,254 +222,215 @@ function bytesToB64(bytes){const b=bytes instanceof Uint8Array?bytes:new Uint8Ar
 function b64ToBytes(s){const b=atob(String(s||'')),o=new Uint8Array(b.length);for(let i=0;i<b.length;i++)o[i]=b.charCodeAt(i);return o}
 async function sealJson(obj){return bytesToB64(await sealMesh(enc.encode(JSON.stringify(obj))))}
 async function openJson(s){return JSON.parse(dec.decode(await openMesh(b64ToBytes(s))))}
-async function importStrategy(pkg){const urls=[`https://cdn.jsdelivr.net/npm/${pkg}@${TRYSTERO_VERSION}/+esm`,`https://esm.run/${pkg}@${TRYSTERO_VERSION}`,`https://esm.sh/${pkg}@${TRYSTERO_VERSION}?bundle`];let last;for(const u of urls){try{const m=await import(u);if(!m.joinRoom)throw new Error('joinRoom export missing');return m}catch(e){last=e}}throw last||new Error('unable to load '+pkg)}
-async function loadStrategy(name){
-  if(!meshModuleCache.has(name)){const job=importStrategy(MESH_STRATEGIES[name].pkg).catch(e=>{meshModuleCache.delete(name);throw e});meshModuleCache.set(name,job)}
-  return meshModuleCache.get(name)
+function meshSeenRecently(kind,bytes,mark=true){const key=meshByteFingerprint(kind,bytes),now=Date.now(),t=meshSeen.get(key);if(mark){meshSeen.delete(key);meshSeen.set(key,now);while(meshSeen.size>4096)meshSeen.delete(meshSeen.keys().next().value)}return t!==undefined&&now-t<MESH_SEEN_TTL}
+function meshPruneSeen(){const cut=Date.now()-MESH_SEEN_TTL;for(const[k,t]of meshSeen)if(t<cut)meshSeen.delete(k);for(const[k,t]of meshHelloReply)if(t<cut)meshHelloReply.delete(k)}
+function networkMayConnect(){return !meshStopped&&navigator.onLine!==false&&document.visibilityState==='visible'}
+function endpointState(url){let x=meshEndpointHealth.get(url);if(!x){x={attempts:0,failures:0,connected:false,connecting:false,nextAttempt:0,lastAttempt:0,openedAt:0};meshEndpointHealth.set(url,x)}return x}
+function beginEndpoint(url){
+  const x=endpointState(url),now=Date.now();
+  if(!networkMayConnect()||x.connected||x.connecting||now<x.nextAttempt)return false;
+  while(connectAttempts.length&&now-connectAttempts[0]>=60000)connectAttempts.shift();
+  if(connectAttempts.length>=CONNECT_ATTEMPTS_PER_MINUTE)return false;
+  connectAttempts.push(now);x.attempts++;x.lastAttempt=now;x.connecting=true;return true
 }
-function meshPeerRouteCount(){let n=0;for(const w of meshWrappers.values())n+=w.peers.size;return n}
-function meshOnlineCount(){return [...meshStatus.values()].filter(x=>x==='on'||x==='ready'||x==='degraded'||x==='connecting').length}
-function meshPathTarget(){return Object.values(MESH_STRATEGIES).reduce((n,x)=>n+x.shards,0)+5}
-function updateMeshState(){const el=$('#syncState'),online=meshOnlineCount(),peers=Math.max(0,awareness.getStates().size-1),routes=meshPeerRouteCount(),fast=[...peerPrimaryRoute].filter(([actor,id])=>(peerRoutes.get(actor)?.get(id)?.bps||0)>0).length,total=meshPathTarget();meshReady=online>0;el.textContent=peers?`live · ${peers} peer${peers===1?'':'s'} · ${routes} route${routes===1?'':'s'}${fast?` · ${fast} fast`:''}`:`mesh ${online}/${total} · seeking peers`;el.className='syncState '+(peers?'online':online?'warn':'')}
-function meshAction(w,kind){if(!w)return null;if(kind==='y')return w.y;if(kind==='aw')return w.aw;if(kind==='assetctl')return w.assetCtl;if(kind==='asset')return w.asset;return null}
-async function meshBroadcast(kind,bytes,except=null){const sealed=await sealMesh(bytes);const sends=[];for(const w of meshWrappers.values()){if(w===except||!w.peers.size)continue;const a=meshAction(w,kind);if(!a?.send)continue;sends.push(Promise.resolve(a.send(sealed)).catch(()=>{}))}if(bc&&kind!=='asset'){try{bc.postMessage({kind,packet:sealed})}catch(_){}}await Promise.allSettled(sends)}
-async function meshSendTo(w,kind,bytes,peerId){try{const sealed=await sealMesh(bytes),a=meshAction(w,kind);if(!a?.send)return false;await a.send(sealed,{target:peerId});return true}catch(_){return false}}
-async function bridgeMeshPayload(kind,bytes,origin=null){await Promise.allSettled([meshBroadcast(kind,bytes,origin&&typeof origin==='object'?origin:null),relayBroadcast(kind,bytes,origin)])}
-async function onMeshY(packet,w){try{const update=await openMesh(packet);if(meshSeenRecently('y',update))return;receivedRemoteSync=true;queueRemoteYUpdate(update);adaptiveMeshBroadcast('y',update,w||MESH_REMOTE,{repair:false}).catch(()=>{})}catch(_){}}
-async function onMeshAw(packet,w){try{const update=await openMesh(packet);if(meshSeenRecently('aw',update))return;applyAwarenessUpdate(awareness,update,w||MESH_REMOTE);adaptiveMeshBroadcast('aw',update,w||MESH_REMOTE,{repair:false}).catch(()=>{})}catch(_){}}
-async function onMeshAssetCtl(packet,w,peerId){try{const bytes=await openMesh(packet);if(meshSeenRecently('assetctl',bytes))return;await handleAssetControlBytes(bytes,w,peerId);adaptiveMeshBroadcast('assetctl',bytes,w||MESH_REMOTE,{repair:false}).catch(()=>{})}catch(_){}}
-async function onMeshAsset(packet,w,peerId){try{const bytes=await openMesh(packet);await receiveAssetChunk(bytes,w,peerId)}catch(_){}}
-async function leaveStrategy(key){
-  const w=meshWrappers.get(key);if(!w)return;
-  w.retiring=true;
-  unregisterWrapperRoutes(w);
-  w.leavePromise ||= Promise.resolve().then(()=>w.room.leave?.()).catch(()=>{});
-  await w.leavePromise;
-  if(meshWrappers.get(key)===w)meshWrappers.delete(key)
+function endpointOpened(url){const x=endpointState(url);x.connecting=false;x.connected=true;x.openedAt=Date.now()}
+function endpointFailed(url){
+  const x=endpointState(url),now=Date.now();
+  if(!x.connecting&&!x.connected&&x.nextAttempt>now)return;
+  if(x.connected&&now-x.openedAt>=CONNECT_RETRY_MS)x.failures=0;
+  x.connected=false;x.connecting=false;x.failures++;x.nextAttempt=now+Math.min(CONNECT_MAX_RETRY_MS,CONNECT_RETRY_MS*2**Math.min(10,x.failures-1))
 }
-function joinStrategy(name,shard=0,epoch=meshEpochNow(),replaceIdle=false){
-  const key=`${name}:${shard}`;
-  if(meshStopped)return Promise.resolve(false);
-  if(meshStrategyJobs.has(key))return meshStrategyJobs.get(key);
-  const generation=meshGeneration;
-  const job=joinStrategyNow(name,shard,epoch,replaceIdle,generation).finally(()=>{if(meshStrategyJobs.get(key)===job)meshStrategyJobs.delete(key)});
-  meshStrategyJobs.set(key,job);return job
+function endpointReleased(url){const x=endpointState(url);x.connected=false;x.connecting=false}
+function withDeadline(job,ms=CONNECT_TIMEOUT_MS){let timer;return Promise.race([job,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('connection timeout')),ms)})]).finally(()=>clearTimeout(timer))}
+function meshPeerRouteCount(){return meshWrappers.size}
+function meshOnlineCount(){return Number(!!natsState.nc)+Number(mqttRelayState.ready.size>0)+Number(nostrRelayState.ready.size>0)}
+function updateMeshState(){const el=$('#syncState'),online=meshOnlineCount(),peers=Math.max(0,awareness.getStates().size-1);meshReady=online>0;el.textContent=peers?`live · ${peers} peer${peers===1?'':'s'} · ${meshPeerRouteCount()} routes`:`mesh ${online}/3 · seeking peers`;el.className='syncState '+(peers?'online':online?'warn':'')}
+function routeKey(w,peerId){return`${w?.name||'route'}|${peerId||'*'}`}
+function routeDescriptor(r){return{actor:r.actor,routeId:r.routeId,strategy:r.strategy,peerId:r.peerId,rtt:Number.isFinite(r.rtt)?Math.round(r.rtt):null,bps:Math.round(r.bps||0),lastSeen:r.lastSeen,primary:peerPrimaryRoute.get(r.actor)===r.routeId}}
+function routeScore(r){return Date.now()-r.lastSeen>ROUTE_STALE_MS?-Infinity:(routeStrategyBase[r.strategy]||0)-(Number.isFinite(r.rtt)?r.rtt:1000)}
+function recomputePrimaryRoute(actor){const m=peerRoutes.get(actor);let best=null;for(const r of m?.values()||[])if(!best||routeScore(r)>routeScore(best))best=r;if(best&&Number.isFinite(routeScore(best))){peerPrimaryRoute.set(actor,best.routeId);return best}peerPrimaryRoute.delete(actor);return null}
+function registerPeerRoute(actor,w,peerId,strategy=w?.strategy||'unknown'){
+  if(!actor||actor===meshActor||!w)return null;let m=peerRoutes.get(actor);if(!m){m=new Map;peerRoutes.set(actor,m)}
+  const id=routeKey(w,peerId),r=m.get(id)||{actor,routeId:id,strategy,wrapper:w,peerId,lastProbe:0,lastBench:0,rtt:Infinity,bps:0,failures:0};r.lastSeen=Date.now();m.set(id,r);routePeerActors.set(id,actor);recomputePrimaryRoute(actor);return r
 }
-async function joinStrategyNow(name,shard,epoch,replaceIdle,generation){
-  const spec=MESH_STRATEGIES[name],key=`${name}:${shard}`,current=meshWrappers.get(key);
-  if(current){if(current.peers.size||(!replaceIdle&&meshStatus.get(key)!=='err'))return true;await leaveStrategy(key)}
-  if(meshStopped||generation!==meshGeneration)return false;
-  meshStatus.set(key,'loading');updateMeshState();
-  try{
-    const mod=await loadStrategy(name);if(meshStopped||generation!==meshGeneration)return false;const urls=pickCandidates(name,spec.batch,shard,epoch);urls.forEach(u=>markEndpoint(u,'try'));
-    const cfg={appId:`${MESH_APP_ID}:${name}:${shard}`,password:room,relayConfig:{urls,warnOnRelayFailure:false},rtcConfig:rtcConfig(),trickleIce:name!=='torrent'},roomObj=mod.joinRoom(cfg,meshRoomName,{handshakeTimeoutMs:14000,onJoinError:()=>{meshStatus.set(key,'degraded');urls.forEach(u=>markEndpoint(u,'fail'));updateMeshState()}}),w={name:key,strategy:name,room:roomObj,peers:new Set(),urls,epoch,joinedAt:Date.now(),lastPeerAt:0};
-    w.y=roomObj.makeAction('scratch-y');w.aw=roomObj.makeAction('scratch-awareness');w.meta=roomObj.makeAction('scratch-meta');w.ctl=roomObj.makeAction('scratch-route');w.assetCtl=roomObj.makeAction('scratch-assetctl');w.asset=roomObj.makeAction('scratch-asset');w.peerActors=new Map();meshWrappers.set(key,w);
-    const current=()=>!meshStopped&&!w.retiring&&generation===meshGeneration&&meshWrappers.get(key)===w;
-    w.y.onMessage=packet=>{if(current())return onMeshY(packet,w)};w.aw.onMessage=packet=>{if(current())return onMeshAw(packet,w)};
-    w.assetCtl.onMessage=(packet,peerId)=>{if(current())return onMeshAssetCtl(packet,w,peerId)};w.asset.onMessage=(packet,peerId)=>{if(current())return onMeshAsset(packet,w,peerId)};
-    w.meta.onMessage=(msg,peerId)=>{if(!current())return;const actor=String(msg?.actor||''),a=String(msg?.nknAddr||'');if(actor){w.peerActors.set(peerId,actor);registerPeerRoute(actor,w,peerId,name)}if(a)ensureNknRoute(a,actor).catch(()=>{})};w.ctl.onMessage=(packet,peerId)=>{if(current())return handleRouteControl(packet,w,peerId)};
-    roomObj.onPeerJoin=peerId=>{if(!current())return;w.peers.add(peerId);w.lastPeerAt=Date.now();urls.forEach(u=>markEndpoint(u,'ok'));meshStatus.set(key,'on');updateMeshState();meshSendTo(w,'y',Y.encodeStateAsUpdate(ydoc),peerId);meshSendTo(w,'aw',encodeAwarenessUpdate(awareness,[ydoc.clientID]),peerId);try{w.meta.send({actor:meshActor,nknAddr:nknState.addr||'',ts:Date.now(),caps:['route-v1','bench-v1','asset-v1']},{target:peerId})}catch(_){}};
-    roomObj.onPeerLeave=peerId=>{if(!current())return;w.peers.delete(peerId);w.lastPeerAt=Date.now();unregisterWrapperRoutes(w,peerId);w.peerActors?.delete(peerId);meshStatus.set(key,w.peers.size?'on':'ready');updateMeshState()};meshStatus.set(key,'ready');updateMeshState();return true
-  }catch(_){if(!meshStopped&&generation===meshGeneration){meshStatus.set(key,'err');updateMeshState()}return false}
+function unregisterWrapperRoutes(w){for(const[token,x]of routeBenchPending)if(x.r.wrapper===w){clearTimeout(x.timer);routeBenchPending.delete(token);x.resolve(false)}for(const[actor,m]of peerRoutes){for(const[id,r]of m)if(r.wrapper===w){m.delete(id);routePeerActors.delete(id)}if(!m.size){peerRoutes.delete(actor);peerPrimaryRoute.delete(actor)}else recomputePrimaryRoute(actor)}}
+function healthyRoutesFor(actor){return[...(peerRoutes.get(actor)?.values()||[])].filter(r=>Date.now()-r.lastSeen<ROUTE_STALE_MS).sort((a,b)=>routeScore(b)-routeScore(a))}
+function primaryRouteFor(actor){return recomputePrimaryRoute(actor)}
+function routePending(token,kind,r,bytes=0){return new Promise(resolve=>{const timer=setTimeout(()=>{routeBenchPending.delete(token);resolve(false)},5000);routeBenchPending.set(token,{kind,r,bytes,resolve,timer,t0:performance.now()})})}
+async function handleRouteControl(packet,w,peerId){try{const msg=JSON.parse(dec.decode(await openMesh(packet)));if(msg.from===meshActor||msg.to!==meshActor)return;const r=registerPeerRoute(msg.from,w,peerId);if(msg.t==='ping'){await w.ctl.send(await sealMesh(enc.encode(JSON.stringify({t:'pong',from:meshActor,to:msg.from,token:msg.token}))),{target:peerId})}else if(msg.t==='pong'){const x=routeBenchPending.get(msg.token);if(x){clearTimeout(x.timer);routeBenchPending.delete(msg.token);r.rtt=performance.now()-x.t0;x.resolve(true)}}}catch(_){}}
+function prunePeerRoutes(now=Date.now()){
+  for(const[actor,m]of peerRoutes){for(const[id,r]of m)if(now-r.lastSeen>ROUTE_STALE_MS*2){m.delete(id);routePeerActors.delete(id);for(const[token,x]of routeBenchPending)if(x.r===r){clearTimeout(x.timer);routeBenchPending.delete(token);x.resolve(false)}}if(!m.size){peerRoutes.delete(actor);peerPrimaryRoute.delete(actor)}}
+  for(const[actor,x]of natsState.sessions)if(now-x.lastSeen>ROUTE_STALE_MS*2)closeNatsPeer(actor);
+  for(const[actor,x]of relayActors)if(now-x.lastSeen>ROUTE_STALE_MS*2){relayActors.delete(actor);const w=meshWrappers.get('relay:'+actor);if(w){w.peers.clear();unregisterWrapperRoutes(w);meshWrappers.delete(w.name)}}
+  for(const[actor,t]of rtcRetryAt)if(now-t>CONNECT_MAX_RETRY_MS)rtcRetryAt.delete(actor)
 }
-async function rotateIdleStrategies(epoch=meshEpochNow()){
-  let delay=0;const generation=meshGeneration;
-  for(const[name,spec]of Object.entries(MESH_STRATEGIES))for(let shard=0;shard<spec.shards;shard++){
-    const key=`${name}:${shard}`,w=meshWrappers.get(key);
-    if(w?.peers.size||meshRotationTimers.has(key)||meshStrategyJobs.has(key))continue;
-    if(w?.epoch===epoch&&meshStatus.get(key)!=='err')continue;
-    const timer=setTimeout(()=>{
-      meshRotationTimers.delete(key);
-      if(meshStopped||generation!==meshGeneration)return;
-      joinStrategy(name,shard,epoch,true).catch(()=>{})
-    },delay);
-    meshRotationTimers.set(key,timer);delay+=350
-  }
+function probeAllPeerRoutes(){if(routeProbeJob)return routeProbeJob;const job=(async()=>{prunePeerRoutes();await Promise.allSettled([...peerRoutes.values()].flatMap(m=>[...m.values()]).filter(r=>r.strategy==='nats'&&Date.now()-r.lastProbe>=ROUTE_PROBE_MS).map(async r=>{r.lastProbe=Date.now();const token=crypto.randomUUID(),wait=routePending(token,'ping',r);try{await r.wrapper.ctl.send(await sealMesh(enc.encode(JSON.stringify({t:'ping',from:meshActor,to:r.actor,token}))),{target:r.peerId});await wait}catch(_){}}))})().finally(()=>{if(routeProbeJob===job)routeProbeJob=null});routeProbeJob=job;return job}
+function ensureRelayPeerRoute(actor){
+  const peerId='relay:'+actor;let w=meshWrappers.get(peerId);
+  if(!w){w={name:peerId,actor,strategy:'relay',peers:new Set([peerId]),room:{leave:()=>{}},asset:{send:packet=>sendRelayPacket(actor,'asset',packet)}};meshWrappers.set(peerId,w)}
+  registerPeerRoute(actor,w,peerId,'relay');return w
 }
-
-/* Independent NATS rendezvous -> direct WebRTC data channels. */
-const relayActors=new Map();
-function noteRelayActor(actor,nknAddr='',plane=''){if(!actor||actor===meshActor)return;const prev=relayActors.get(actor)||{planes:{}};prev.lastSeen=Date.now();prev.plane=plane;prev.planes={...(prev.planes||{}),[plane]:Date.now()};relayActors.set(actor,prev);if(nknAddr)ensureNknRoute(nknAddr,actor).catch(()=>{})}
-async function respondRelayHello(actor,plane){if(!actor||actor===meshActor)return;const key=`${plane}:${actor}`,now=Date.now();if(now-(meshHelloReply.get(key)||0)<3000)return;meshHelloReply.set(key,now);const y=Y.encodeStateAsUpdate(ydoc),aw=encodeAwarenessUpdate(awareness,[ydoc.clientID]);if(plane==='nats'){await publishNatsRelay('y',y);await publishNatsRelay('aw',aw)}else if(plane==='mqtt'){await publishMqttRelay('y',y);await publishMqttRelay('aw',aw)}else if(plane==='nostr'){if(y.byteLength<=48000)await publishNostrRelay('y',y);await publishNostrRelay('aw',aw)}}
-const natsState={module:null,nc:null,presence:null,signal:null,relay:null,timer:null,sessions:new Map(),status:'off',starting:null,generation:0};
-async function importNats(){if(natsState.module)return natsState.module;let last;for(const u of [`https://esm.run/@nats-io/nats-core@${NATS_VERSION}`,`https://esm.sh/@nats-io/nats-core@${NATS_VERSION}?bundle`,`https://cdn.jsdelivr.net/npm/@nats-io/nats-core@${NATS_VERSION}/+esm`]){try{const m=await import(u);if(!m.wsconnect)throw new Error('wsconnect missing');natsState.module=m;return m}catch(e){last=e}}throw last||new Error('NATS module unavailable')}
+function noteRelayActor(actor,_unused='',plane=''){if(!actor||actor===meshActor)return;const x=relayActors.get(actor)||{planes:{}};x.lastSeen=Date.now();x.planes[plane]=x.lastSeen;relayActors.set(actor,x);ensureRelayPeerRoute(actor)}
+async function sendRelayPacket(to,kind,packet){
+  const bytes=enc.encode(JSON.stringify({from:meshActor,to,kind,p:bytesToB64(packet)})),planes=relayActors.get(to)?.planes||{};
+  if(planes.bc&&bc){try{bc.postMessage({kind:'peer-packet',packet:await sealMesh(bytes)});return true}catch(_){}}
+  if(planes.mqtt&&await publishMqttRelay('packet',bytes,true))return true;
+  if(planes.nats&&await publishNatsRelay('packet',bytes,true))return true;
+  return publishNostrRelay('packet',bytes)
+}
+async function applyPeerPacket(bytes){try{const msg=JSON.parse(dec.decode(bytes));if(msg.to!==meshActor||!msg.from||msg.from===meshActor)return;const w=ensureRelayPeerRoute(msg.from);if(msg.kind==='asset')await onMeshAsset(b64ToBytes(msg.p),w,w.name)}catch(_){}}
+async function respondRelayHello(actor,plane){const key=plane+':'+actor,now=Date.now();if(now-(meshHelloReply.get(key)||0)<30000)return;meshHelloReply.set(key,now);const publish=plane==='mqtt'?publishMqttRelay:plane==='nats'?publishNatsRelay:publishNostrRelay;await publish('y',Y.encodeStateAsUpdate(ydoc));await publish('aw',encodeAwarenessUpdate(awareness,[ydoc.clientID]))}
+function meshAction(w,kind){return kind==='y'?w.y:kind==='aw'?w.aw:kind==='assetctl'?w.assetCtl:kind==='asset'?w.asset:null}
+async function meshSendTo(w,kind,bytes,peerId){try{const a=meshAction(w,kind);return !!a?.send&&(await a.send(await sealMesh(bytes),{target:peerId}))!==false}catch(_){return false}}
+async function adaptiveMeshBroadcast(kind,bytes,origin=null,{repair=false}={}){
+  const jobs=[];for(const actor of peerRoutes.keys()){const r=healthyRoutesFor(actor).find(r=>r.strategy==='nats');if(r&&r.wrapper!==origin)jobs.push(meshSendTo(r.wrapper,kind,bytes,r.peerId))}
+  if(bc){try{bc.postMessage({kind,from:meshActor,packet:await sealMesh(bytes)})}catch(_){}}
+  jobs.push(relayBroadcast(kind,bytes,origin));await Promise.allSettled(jobs)
+}
+async function onMeshY(packet,w){try{const bytes=await openMesh(packet);if(meshSeenRecently('y',bytes))return;receivedRemoteSync=true;queueRemoteYUpdate(bytes);adaptiveMeshBroadcast('y',bytes,w).catch(()=>{})}catch(_){}}
+async function onMeshAw(packet,w){try{const bytes=await openMesh(packet);if(meshSeenRecently('aw',bytes))return;applyAwarenessUpdate(awareness,bytes,w);adaptiveMeshBroadcast('aw',bytes,w).catch(()=>{})}catch(_){}}
+async function onMeshAssetCtl(packet,w,peerId){try{const bytes=await openMesh(packet);if(meshSeenRecently('assetctl',bytes))return;await handleAssetControlBytes(bytes,w,peerId)}catch(_){}}
+async function onMeshAsset(packet,w,peerId){try{await receiveAssetChunk(await openMesh(packet),w,peerId)}catch(_){}}
+function allowRtcPeer(actor){const now=Date.now();while(rtcAttempts.length&&now-rtcAttempts[0]>=60000)rtcAttempts.shift();if(typeof RTCPeerConnection!=='function'||!networkMayConnect()||natsState.sessions.size>=RTC_MAX_PEERS||now<(rtcRetryAt.get(actor)||0)||rtcAttempts.length>=RTC_MAX_PEERS)return false;rtcAttempts.push(now);return true}
+async function publishNatsRelay(kind,bytes=new Uint8Array(),waitAck=false){const nc=natsState.nc;if(!nc)return false;try{const payload=enc.encode(await sealJson({v:5,kind,from:meshActor,ts:Date.now(),p:bytes.byteLength?bytesToB64(bytes):''}));if(meshStopped||natsState.nc!==nc)return false;nc.publish(natsSubjects().relay,payload);if(waitAck)await withDeadline(nc.flush());return true}catch(_){return false}}
 function natsSubjects(remote=meshActor){const h=meshRoomName.replace(/[^a-z0-9]/gi,'').slice(-28);return{presence:`scratch.min.${h}.presence`,signal:`scratch.min.${h}.signal.${remote}`,relay:`scratch.min.${h}.relay`}}
 async function natsPublish(subject,obj){if(!natsState.nc)return;natsState.nc.publish(subject,enc.encode(await sealJson(obj)))}
 async function natsConsume(sub,fn){try{for await(const m of sub)fn(m.data)}catch(_){}}
-async function publishNatsRelay(kind,bytes=new Uint8Array()){if(!natsState.nc)return false;try{natsState.nc.publish(natsSubjects().relay,enc.encode(await sealJson({v:5,kind,from:meshActor,ts:Date.now(),nknAddr:nknState.addr||'',p:bytes?.byteLength?bytesToB64(bytes):''})));meshStatus.set('nats-relay','on');updateMeshState();return true}catch(_){return false}}
-async function handleNatsRelay(raw){try{const msg=await openJson(dec.decode(raw));if(msg?.v!==5||msg.from===meshActor||Math.abs(Date.now()-msg.ts)>120000)return;noteRelayActor(msg.from,msg.nknAddr,'nats');meshStatus.set('nats-relay','on');updateMeshState();if(msg.kind==='hello'){respondRelayHello(msg.from,'nats').catch(()=>{});return}if(!['y','aw','assetctl'].includes(msg.kind)||!msg.p)return;await applyRelayPayload(msg.kind,b64ToBytes(msg.p),NATS_RELAY_REMOTE)}catch(_){}}
-const DEFAULT_STUN_URLS=['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun2.l.google.com:19302','stun:stun3.l.google.com:19302','stun:stun4.l.google.com:19302','stun:global.stun.twilio.com:3478'];
+async function publishNatsPresence(){await natsPublish(natsSubjects().presence,{v:1,actor:meshActor,ts:Date.now(),expires:Date.now()+30000,nknAddr:''})}
+const DEFAULT_STUN_URLS=['stun:stun.cloudflare.com:3478','stun:stun.l.google.com:19302'];
 function normalizeIceServers(v){if(!Array.isArray(v))return[];return v.filter(x=>x&&typeof x==='object'&&(typeof x.urls==='string'||Array.isArray(x.urls))).map(x=>({urls:x.urls,username:x.username||undefined,credential:x.credential||undefined})).slice(0,12)}
 function storedTurnIce(){let out=[];try{out.push(...normalizeIceServers(JSON.parse(localStorage.getItem('scratch-min-turn-ice')||'[]')))}catch(_){}try{out.push(...normalizeIceServers(window.SCRATCH_TURN_ICE||[]))}catch(_){}out.push(...runtimeTurnIce);return out.filter((x,i,a)=>{const k=JSON.stringify(x);return a.findIndex(y=>JSON.stringify(y)===k)===i})}
 async function refreshTurnIce(){const url=window.SCRATCH_TURN_CREDENTIAL_URL||localStorage.getItem('scratch-min-turn-url')||'';if(!url)return runtimeTurnIce;try{const r=await fetch(url,{cache:'no-store',credentials:'omit'});if(!r.ok)throw new Error('TURN credential endpoint '+r.status);const j=await r.json(),arr=Array.isArray(j)?j:(j.iceServers||j.ice_servers||j.servers||[]);runtimeTurnIce=normalizeIceServers(arr);meshStatus.set('turn',runtimeTurnIce.length?'ready':'off')}catch(_){meshStatus.set('turn','err')}updateMeshState();return runtimeTurnIce}
-function rtcConfig(){return{iceServers:[{urls:DEFAULT_STUN_URLS},...storedTurnIce()],iceCandidatePoolSize:0,bundlePolicy:'max-bundle',rtcpMuxPolicy:'require',iceTransportPolicy:localStorage.getItem('scratch-min-ice-policy')==='relay'?'relay':'all'}}
+function rtcConfig(){
+  const iceServers=[];let budget=RTC_MAX_ICE_URLS;
+  for(const server of storedTurnIce()){const urls=[...new Set(Array.isArray(server.urls)?server.urls:[server.urls])].filter(url=>/^turns?:/.test(url)).slice(0,budget);if(urls.length){iceServers.push({...server,urls});budget-=urls.length}if(!budget)break}
+  const relay=localStorage.getItem('scratch-min-ice-policy')==='relay';if(!relay&&budget)iceServers.push({urls:DEFAULT_STUN_URLS.slice(0,budget)});
+  return{iceServers,iceCandidatePoolSize:0,bundlePolicy:'max-bundle',rtcpMuxPolicy:'require',iceTransportPolicy:relay?'relay':'all'}
+}
 async function applyRelayPayload(kind,bytes,origin){try{if(meshSeenRecently(kind,bytes))return;if(kind==='y'){receivedRemoteSync=true;queueRemoteYUpdate(bytes)}else if(kind==='aw')applyAwarenessUpdate(awareness,bytes,origin);else if(kind==='assetctl')await handleAssetControlBytes(bytes,null,null);adaptiveMeshBroadcast(kind,bytes,origin,{repair:false}).catch(()=>{})}catch(_){}}
 function isRelayOrigin(origin){return origin===NATS_RELAY_REMOTE||origin===MQTT_RELAY_REMOTE||origin===NOSTR_RELAY_REMOTE}
 function waitIce(pc,timeout=7000){return new Promise(resolve=>{if(pc.iceGatheringState==='complete')return resolve();const done=()=>{clearTimeout(t);pc.removeEventListener('icegatheringstatechange',check);resolve()},check=()=>{if(pc.iceGatheringState==='complete')done()},t=setTimeout(done,timeout);pc.addEventListener('icegatheringstatechange',check)})}
-async function natsSignal(remote,type,payload,session){await natsPublish(natsSubjects(remote).signal,{v:1,type,from:meshActor,to:remote,session,ts:Date.now(),payload,nknAddr:nknState.addr||''})}
+async function natsSignal(remote,type,payload,session){await natsPublish(natsSubjects(remote).signal,{v:1,type,from:meshActor,to:remote,session,ts:Date.now(),payload,nknAddr:''})}
 function closeNatsPeer(remote){
   const x=natsState.sessions.get(remote);if(!x)return;x.closed=true;clearTimeout(x.retryTimer);
   natsState.sessions.delete(remote);
   if(x.dc){x.dc.onopen=null;x.dc.onmessage=null;x.dc.onclose=null;try{x.dc.close()}catch(_){}}
   if(x.pc){x.pc.onconnectionstatechange=null;x.pc.oniceconnectionstatechange=null;x.pc.ondatachannel=null;try{x.pc.close()}catch(_){}}
-  if(x.wrapper){unregisterWrapperRoutes(x.wrapper);meshWrappers.delete(x.wrapper.name)}updateMeshState()
+  if(x.wrapper){x.wrapper.peers.clear();unregisterWrapperRoutes(x.wrapper);meshWrappers.delete(x.wrapper.name)}updateMeshState()
 }
-function retryNatsPeer(remote){const old=natsState.sessions.get(remote);if(old?.retryTimer)return;const delay=900+(hash32(remote+meshActor)%1800);if(old)old.retryTimer=setTimeout(()=>{closeNatsPeer(remote);if(meshActor<remote)makeNatsOffer(remote).catch(()=>{})},delay);else if(meshActor<remote)setTimeout(()=>makeNatsOffer(remote).catch(()=>{}),delay)}
-function attachNatsChannel(remote,session,pc,dc){let x=natsState.sessions.get(remote)||{remote,session,pc,closed:false,lastSeen:Date.now()};x.session=session;x.pc=pc;x.dc=dc;natsState.sessions.set(remote,x);dc.binaryType='arraybuffer';dc.bufferedAmountLowThreshold=512000;const waitDrain=()=>new Promise(resolve=>{if(dc.bufferedAmount<2000000)return resolve();const done=()=>{dc.removeEventListener('bufferedamountlow',done);resolve()};dc.addEventListener('bufferedamountlow',done,{once:true});setTimeout(done,1800)});const open=()=>{if(x.closed||x.wrapper||dc.readyState!=='open')return;const peerId='nats:'+remote,w={name:peerId,strategy:'nats',actor:remote,room:{leave:()=>closeNatsPeer(remote)},peers:new Set([peerId])};const send=(kind)=>({send:async(packet,opts={})=>{if(opts.target&&opts.target!==peerId)return false;if(dc.readyState!=='open')return false;if(dc.bufferedAmount>4000000)await waitDrain();if(dc.readyState!=='open')return false;dc.send(JSON.stringify({k:kind,p:bytesToB64(packet)}));return true}});w.y=send('y');w.aw=send('aw');w.ctl=send('ctl');w.assetCtl=send('assetctl');w.asset=send('asset');x.wrapper=w;meshWrappers.set(w.name,w);registerPeerRoute(remote,w,peerId,'nats');meshStatus.set('nats','on');updateMeshState();meshSendTo(w,'y',Y.encodeStateAsUpdate(ydoc),peerId);meshSendTo(w,'aw',encodeAwarenessUpdate(awareness,[ydoc.clientID]),peerId);requestMissingMediaAssets(250).catch(()=>{})};dc.onopen=open;dc.onmessage=e=>{x.lastSeen=Date.now();try{const m=JSON.parse(String(e.data)),packet=b64ToBytes(m.p);if(m.k==='y')onMeshY(packet,x.wrapper);else if(m.k==='aw')onMeshAw(packet,x.wrapper);else if(m.k==='ctl')handleRouteControl(packet,x.wrapper,'nats:'+remote);else if(m.k==='assetctl')onMeshAssetCtl(packet,x.wrapper,'nats:'+remote);else if(m.k==='asset')onMeshAsset(packet,x.wrapper,'nats:'+remote)}catch(_){}};dc.onclose=()=>{if(!x.closed)closeNatsPeer(remote)};open()}
-async function makeNatsOffer(remote){if(remote===meshActor||natsState.sessions.has(remote))return;const session=crypto.randomUUID?.()||randomKey(8),pc=new RTCPeerConnection(rtcConfig()),dc=pc.createDataChannel('scratch-min',{ordered:false});natsState.sessions.set(remote,{remote,session,pc,dc,closed:false,wrapper:null,lastSeen:Date.now()});attachNatsChannel(remote,session,pc,dc);pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed')retryNatsPeer(remote);else if(pc.connectionState==='closed')closeNatsPeer(remote)};pc.oniceconnectionstatechange=()=>{if(['failed','disconnected'].includes(pc.iceConnectionState))retryNatsPeer(remote)};try{await pc.setLocalDescription(await pc.createOffer());await waitIce(pc);await natsSignal(remote,'offer',{sdp:pc.localDescription.sdp},session)}catch(_){closeNatsPeer(remote)}}
-async function acceptNatsOffer(msg){const remote=msg.from;if(natsState.sessions.has(remote))closeNatsPeer(remote);const pc=new RTCPeerConnection(rtcConfig()),x={remote,session:msg.session,pc,dc:null,closed:false,wrapper:null,lastSeen:Date.now()};natsState.sessions.set(remote,x);pc.ondatachannel=e=>{x.dc=e.channel;attachNatsChannel(remote,msg.session,pc,e.channel)};pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed')retryNatsPeer(remote);else if(pc.connectionState==='closed')closeNatsPeer(remote)};pc.oniceconnectionstatechange=()=>{if(['failed','disconnected'].includes(pc.iceConnectionState))retryNatsPeer(remote)};try{await pc.setRemoteDescription({type:'offer',sdp:String(msg.payload?.sdp||'')});await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc);await natsSignal(remote,'answer',{sdp:pc.localDescription.sdp},msg.session)}catch(_){closeNatsPeer(remote)}}
-async function handleNatsPresence(raw){try{const msg=await openJson(dec.decode(raw));if(msg?.v!==1||msg.actor===meshActor||msg.expires<Date.now())return;noteRelayActor(msg.actor,msg.nknAddr,'nats-presence');if(msg.nknAddr)ensureNknRoute(msg.nknAddr,msg.actor).catch(()=>{});if(meshActor<msg.actor&&!natsState.sessions.has(msg.actor))makeNatsOffer(msg.actor)}catch(_){}}
-async function handleNatsSignal(raw){try{const msg=await openJson(dec.decode(raw));if(msg?.v!==1||msg.to!==meshActor||msg.from===meshActor||Math.abs(Date.now()-msg.ts)>90000)return;noteRelayActor(msg.from,msg.nknAddr,'nats-signal');if(msg.nknAddr)ensureNknRoute(msg.nknAddr,msg.from).catch(()=>{});if(msg.type==='offer')await acceptNatsOffer(msg);else if(msg.type==='answer'){const x=natsState.sessions.get(msg.from);if(x&&x.session===msg.session)await x.pc.setRemoteDescription({type:'answer',sdp:String(msg.payload?.sdp||'')})}}catch(_){}}
-async function publishNatsPresence(){await natsPublish(natsSubjects().presence,{v:1,actor:meshActor,ts:Date.now(),expires:Date.now()+30000,nknAddr:nknState.addr||''})}
+function retryNatsPeer(remote){rtcRetryAt.set(remote,Date.now()+CONNECT_RETRY_MS);closeNatsPeer(remote)}
+function attachNatsChannel(remote,session,pc,dc){let x=natsState.sessions.get(remote)||{remote,session,pc,closed:false,lastSeen:Date.now()};x.session=session;x.pc=pc;x.dc=dc;natsState.sessions.set(remote,x);dc.binaryType='arraybuffer';dc.bufferedAmountLowThreshold=512000;const waitDrain=()=>new Promise(resolve=>{if(dc.bufferedAmount<2000000)return resolve();const done=()=>{dc.removeEventListener('bufferedamountlow',done);resolve()};dc.addEventListener('bufferedamountlow',done,{once:true});setTimeout(done,1800)});const open=()=>{if(x.closed||x.wrapper||dc.readyState!=='open')return;const peerId='nats:'+remote,w={name:peerId,strategy:'nats',actor:remote,room:{leave:()=>closeNatsPeer(remote)},peers:new Set([peerId])};const send=(kind)=>({send:async(packet,opts={})=>{if(opts.target&&opts.target!==peerId)return false;if(dc.readyState!=='open')return false;if(dc.bufferedAmount>4000000)await waitDrain();if(dc.readyState!=='open')return false;dc.send(JSON.stringify({k:kind,p:bytesToB64(packet)}));return true}});w.y=send('y');w.aw=send('aw');w.ctl=send('ctl');w.assetCtl=send('assetctl');w.asset=send('asset');x.wrapper=w;meshWrappers.set(w.name,w);registerPeerRoute(remote,w,peerId,'nats');meshStatus.set('nats','on');updateMeshState();meshSendTo(w,'y',Y.encodeStateAsUpdate(ydoc),peerId);meshSendTo(w,'aw',encodeAwarenessUpdate(awareness,[ydoc.clientID]),peerId);requestMissingMediaAssets(250).catch(()=>{})};dc.onopen=open;dc.onmessage=e=>{if(x.closed||natsState.sessions.get(remote)!==x)return;x.lastSeen=Date.now();try{const m=JSON.parse(String(e.data)),packet=b64ToBytes(m.p);if(m.k==='y')onMeshY(packet,x.wrapper);else if(m.k==='aw')onMeshAw(packet,x.wrapper);else if(m.k==='ctl')handleRouteControl(packet,x.wrapper,'nats:'+remote);else if(m.k==='assetctl')onMeshAssetCtl(packet,x.wrapper,'nats:'+remote);else if(m.k==='asset')onMeshAsset(packet,x.wrapper,'nats:'+remote)}catch(_){}};dc.onclose=()=>{if(!x.closed)closeNatsPeer(remote)};open()}
+async function makeNatsOffer(remote){if(meshStopped||!natsState.nc||remote===meshActor||natsState.sessions.has(remote)||!allowRtcPeer(remote))return;const session=crypto.randomUUID?.()||randomKey(8),pc=new RTCPeerConnection(rtcConfig()),dc=pc.createDataChannel('scratch-min',{ordered:false});natsState.sessions.set(remote,{remote,session,pc,dc,closed:false,wrapper:null,lastSeen:Date.now()});attachNatsChannel(remote,session,pc,dc);pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'&&natsState.sessions.get(remote)?.pc===pc)retryNatsPeer(remote);else if(pc.connectionState==='closed')closeNatsPeer(remote)};pc.oniceconnectionstatechange=()=>{if(['failed','disconnected'].includes(pc.iceConnectionState)&&natsState.sessions.get(remote)?.pc===pc)retryNatsPeer(remote)};try{await pc.setLocalDescription(await pc.createOffer());await waitIce(pc);if(natsState.sessions.get(remote)?.pc!==pc)return;await natsSignal(remote,'offer',{sdp:pc.localDescription.sdp},session)}catch(_){if(natsState.sessions.get(remote)?.pc===pc)retryNatsPeer(remote)}}
+async function acceptNatsOffer(msg){const remote=msg.from;if(meshStopped||!natsState.nc||!allowRtcPeer(remote))return;if(natsState.sessions.has(remote))closeNatsPeer(remote);const pc=new RTCPeerConnection(rtcConfig()),x={remote,session:msg.session,pc,dc:null,closed:false,wrapper:null,lastSeen:Date.now()};natsState.sessions.set(remote,x);pc.ondatachannel=e=>{x.dc=e.channel;attachNatsChannel(remote,msg.session,pc,e.channel)};pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'&&natsState.sessions.get(remote)?.pc===pc)retryNatsPeer(remote);else if(pc.connectionState==='closed')closeNatsPeer(remote)};pc.oniceconnectionstatechange=()=>{if(['failed','disconnected'].includes(pc.iceConnectionState)&&natsState.sessions.get(remote)?.pc===pc)retryNatsPeer(remote)};try{await pc.setRemoteDescription({type:'offer',sdp:String(msg.payload?.sdp||'')});await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc);if(natsState.sessions.get(remote)?.pc!==pc)return;await natsSignal(remote,'answer',{sdp:pc.localDescription.sdp},msg.session)}catch(_){if(natsState.sessions.get(remote)?.pc===pc)retryNatsPeer(remote)}}
+async function handleNatsPresence(raw){try{const msg=await openJson(dec.decode(raw));if(msg?.v!==1||msg.actor===meshActor||msg.expires<Date.now())return;noteRelayActor(msg.actor,msg.nknAddr,'nats-presence');if(meshActor<msg.actor&&!natsState.sessions.has(msg.actor))makeNatsOffer(msg.actor).catch(()=>rtcRetryAt.set(msg.actor,Date.now()+CONNECT_RETRY_MS))}catch(_){}}
+async function handleNatsSignal(raw){try{const msg=await openJson(dec.decode(raw));if(msg?.v!==1||msg.to!==meshActor||msg.from===meshActor||Math.abs(Date.now()-msg.ts)>90000)return;noteRelayActor(msg.from,msg.nknAddr,'nats-signal');if(msg.type==='offer')await acceptNatsOffer(msg);else if(msg.type==='answer'){const x=natsState.sessions.get(msg.from);if(x&&x.session===msg.session)await x.pc.setRemoteDescription({type:'answer',sdp:String(msg.payload?.sdp||'')})}}catch(_){}}
+
+const natsState={module:null,nc:null,presence:null,signal:null,relay:null,sessions:new Map(),starting:null,generation:0};
+async function importNats(){if(natsState.module)return natsState.module;let last;for(const u of [`https://esm.run/@nats-io/nats-core@${NATS_VERSION}`,`https://esm.sh/@nats-io/nats-core@${NATS_VERSION}?bundle`,`https://cdn.jsdelivr.net/npm/@nats-io/nats-core@${NATS_VERSION}/+esm`]){try{const m=await import(u);if(!m.wsconnect)throw new Error('wsconnect missing');natsState.module=m;return m}catch(e){last=e}}throw last||new Error('NATS module unavailable')}
 function startNats(){
-  if(meshStopped)return Promise.resolve(false);if(natsState.nc)return Promise.resolve(true);if(natsState.starting)return natsState.starting;
-  const generation=natsState.generation,meshGen=meshGeneration,current=()=>!meshStopped&&generation===natsState.generation&&meshGen===meshGeneration;
-  const job=(async()=>{meshStatus.set('nats','loading');updateMeshState();let nc;
-    try{const mod=await importNats();if(!current())return false;nc=await mod.wsconnect({servers:SIGNALING_ENDPOINTS.nats,reconnect:true,maxReconnectAttempts:-1,reconnectTimeWait:2200,timeout:5000});if(!current()){await nc.close();return false}
-      natsState.nc=nc;natsState.presence=nc.subscribe(natsSubjects().presence);natsState.signal=nc.subscribe(natsSubjects().signal);natsState.relay=nc.subscribe(natsSubjects().relay);
-      natsConsume(natsState.presence,handleNatsPresence);natsConsume(natsState.signal,handleNatsSignal);natsConsume(natsState.relay,handleNatsRelay);
-      meshStatus.set('nats','ready');meshStatus.set('nats-relay','ready');await publishNatsPresence();await publishNatsRelay('hello');await publishNatsRelay('y',Y.encodeStateAsUpdate(ydoc));await publishNatsRelay('aw',encodeAwarenessUpdate(awareness,[ydoc.clientID]));
-      if(!current())return false;natsState.timer=setInterval(()=>publishNatsPresence().catch(()=>{}),4000);updateMeshState();return true
-    }catch(_){if(nc)try{await nc.close()}catch(_){}if(current()){natsState.nc=null;meshStatus.set('nats','err');updateMeshState()}return false}
-  })().finally(()=>{if(natsState.starting===job)natsState.starting=null});natsState.starting=job;return job
+  if(natsState.nc)return Promise.resolve(true);if(natsState.starting)return natsState.starting;
+  const url=SIGNALING_ENDPOINTS.nats[0];if(!beginEndpoint(url))return Promise.resolve(false);
+  const generation=meshGeneration,current=()=>!meshStopped&&generation===meshGeneration;
+  const job=(async()=>{let nc;try{
+    const mod=await withDeadline(importNats());if(!current())return false;
+    nc=await mod.wsconnect({servers:[url],reconnect:false,maxReconnectAttempts:0,waitOnFirstConnect:false,timeout:CONNECT_TIMEOUT_MS});
+    if(!current()){await nc.close();return false}
+    natsState.nc=nc;endpointOpened(url);meshStatus.set('nats','ready');
+    natsState.presence=nc.subscribe(natsSubjects().presence);natsState.signal=nc.subscribe(natsSubjects().signal);natsState.relay=nc.subscribe(natsSubjects().relay);
+    natsConsume(natsState.presence,handleNatsPresence);natsConsume(natsState.signal,handleNatsSignal);natsConsume(natsState.relay,handleNatsRelay);
+    nc.closed().then(()=>{if(current()&&natsState.nc===nc){natsState.nc=null;endpointFailed(url);for(const actor of [...natsState.sessions.keys()])closeNatsPeer(actor);meshStatus.set('nats','off');updateMeshState()}}).catch(()=>{});
+    await publishNatsPresence();await publishNatsRelay('hello');updateMeshState();return true
+  }catch(_){if(nc)try{await nc.close()}catch(_){}if(current()){natsState.nc=null;endpointFailed(url);meshStatus.set('nats','off')}return false}})().finally(()=>{if(natsState.starting===job)natsState.starting=null});natsState.starting=job;return job
 }
-function stopNats(){natsState.generation++;clearInterval(natsState.timer);for(const r of [...natsState.sessions.keys()])closeNatsPeer(r);try{natsState.presence?.unsubscribe?.()}catch(_){}try{natsState.signal?.unsubscribe?.()}catch(_){}try{natsState.relay?.unsubscribe?.()}catch(_){}try{natsState.nc?.close?.()}catch(_){}natsState.nc=null}
-
-/* NKN is an independent encrypted overlay. Addresses are learned over any other
-   live plane; once learned, Yjs and awareness can continue over NKN directly. */
-const nknState={sdk:null,client:null,starting:null,generation:0,addr:'',connected:false,createdAt:0,lastConnectAt:0,lastRecycleAt:0,recycles:0,routes:new Map(),chunks:new Map(),actorByAddr:new Map(),sendChains:new Map(),pendingSends:0,droppedSends:0};
-async function loadNkn(){
-  if(nknState.sdk)return nknState.sdk;if(window.nkn?.MultiClient){nknState.sdk=window.nkn;return window.nkn}if(nknLoadPromise)return nknLoadPromise;
-  nknLoadPromise=(async()=>{let last;const sources=[`https://cdn.jsdelivr.net/npm/nkn-sdk@${NKN_VERSION}/dist/nkn.min.js`,`https://unpkg.com/nkn-sdk@${NKN_VERSION}/dist/nkn.min.js`,`https://cdn.jsdelivr.net/gh/nknorg/nkn-sdk-js@v${NKN_VERSION}/dist/nkn.min.js`];for(const src of sources){try{let x=document.querySelector(`script[data-pad-nkn-sdk="${CSS.escape(src)}"]`);if(!x){x=document.createElement('script');x.src=src;x.async=true;x.crossOrigin='anonymous';x.dataset.padNknSdk=src;document.head.appendChild(x)}if(!window.nkn?.MultiClient)await new Promise((res,rej)=>{if(window.nkn?.MultiClient)return res();const done=()=>{cleanup();res()},fail=()=>{cleanup();try{x.remove()}catch(_){}rej(new Error('NKN CDN failed'))},cleanup=()=>{x.removeEventListener('load',done);x.removeEventListener('error',fail)};x.addEventListener('load',done,{once:true});x.addEventListener('error',fail,{once:true})});if(!window.nkn?.MultiClient)throw new Error('NKN MultiClient missing');nknState.sdk=window.nkn;return window.nkn}catch(e){last=e}}throw last||new Error('NKN unavailable')})().finally(()=>{if(!nknState.sdk)nknLoadPromise=null});return nknLoadPromise
-}
-async function nknSendRaw(dest,raw,{priority=false}={}){
-  if(!nknState.connected||!nknState.client)throw new Error('NKN offline');dest=String(dest||'');if(!dest)throw new Error('NKN destination missing');
-  const generation=nknState.generation,client=nknState.client,max=18000,parts=[];if(raw.length<=max)parts.push(raw);else{const id=crypto.randomUUID?.()||randomKey(8),total=Math.ceil(raw.length/max);for(let i=0;i<total;i++)parts.push(JSON.stringify({c:1,id,i,total,d:raw.slice(i*max,(i+1)*max)}))}
-  if(nknState.pendingSends>=NKN_MAX_PENDING_SENDS){nknState.droppedSends++;return false}
-  nknState.pendingSends++;const prev=nknState.sendChains.get(dest)||Promise.resolve(),job=prev.catch(()=>{}).then(async()=>{for(const part of parts){if(!nknState.connected||client!==nknState.client||generation!==nknState.generation)throw new Error('NKN offline');await client.send(dest,part,{noReply:true})}return true});nknState.sendChains.set(dest,job);try{return await job}catch(_){return false}finally{if(generation===nknState.generation)nknState.pendingSends=Math.max(0,nknState.pendingSends-1);if(nknState.sendChains.get(dest)===job)nknState.sendChains.delete(dest)}
-}
-function nknPeerId(addr){return'nkn:'+addr}
-function getNknWrapper(addr,actor=''){if(nknState.routes.has(addr)){const w=nknState.routes.get(addr);if(actor&&!w.actor){w.actor=actor;nknState.actorByAddr.set(addr,actor);registerPeerRoute(actor,w,nknPeerId(addr),'nkn',false)}return w}const peerId=nknPeerId(addr),w={name:peerId,strategy:'nkn',actor:actor||'',room:{leave:()=>{}},peers:new Set([peerId]),addr,lastSeen:Date.now()};const send=kind=>({send:async(packet,opts={})=>{if(opts.target&&opts.target!==peerId)return false;return nknSendRaw(addr,JSON.stringify({v:2,r:meshRoomName,k:kind,p:bytesToB64(packet),from:meshActor}),{priority:kind==='ctl'})}});w.y=send('y');w.aw=send('aw');w.ctl=send('ctl');w.assetCtl=send('assetctl');w.asset=send('asset');nknState.routes.set(addr,w);meshWrappers.set(w.name,w);if(actor){nknState.actorByAddr.set(addr,actor);registerPeerRoute(actor,w,peerId,'nkn',false)}return w}
-async function ensureNknRoute(addr,actor=''){
-  addr=String(addr||'').trim();if(!addr||addr===nknState.addr||!nknState.connected)return false;const existed=nknState.routes.has(addr),w=getNknWrapper(addr,actor),peerId=nknPeerId(addr);if(actor){nknState.actorByAddr.set(addr,actor);registerPeerRoute(actor,w,peerId,'nkn',false)}meshStatus.set('nkn','on');updateMeshState();const now=Date.now();if(!existed||!w.lastBootstrapSync||now-w.lastBootstrapSync>NKN_BOOTSTRAP_SYNC_MS){w.lastBootstrapSync=now;const full=Y.encodeStateAsUpdate(ydoc),aw=encodeAwarenessUpdate(awareness,[ydoc.clientID]);meshSendTo(w,'y',full,peerId).catch(()=>{});meshSendTo(w,'aw',aw,peerId).catch(()=>{})}return true
-}
-async function handleNknPayload(src,payload){let raw=payload instanceof Uint8Array?dec.decode(payload):String(payload||''),msg;try{msg=JSON.parse(raw)}catch(_){return}if(msg?.c===1){const total=Number(msg.total),i=Number(msg.i),piece=String(msg.d||'');if(!Number.isInteger(total)||total<1||total>128||!Number.isInteger(i)||i<0||i>=total||piece.length>22000)return;const key=`${src}|${msg.id}`;if(!nknState.chunks.has(key)&&nknState.chunks.size>=48){let oldest=null,ot=Infinity;for(const[k,v]of nknState.chunks)if(v.ts<ot){oldest=k;ot=v.ts}if(oldest)nknState.chunks.delete(oldest)}let x=nknState.chunks.get(key);if(!x){x={parts:new Array(total),count:0,total,bytes:0,ts:Date.now()};nknState.chunks.set(key,x)}if(x.total!==total)return nknState.chunks.delete(key);if(x.parts[i]===undefined){x.parts[i]=piece;x.count++;x.bytes+=piece.length;if(x.bytes>2_500_000)return nknState.chunks.delete(key)}if(x.count===x.total){nknState.chunks.delete(key);await handleNknPayload(src,x.parts.join(''))}return}if(![1,2].includes(msg?.v)||msg.r!==meshRoomName||!['y','aw','ctl','assetctl','asset'].includes(msg.k)||!msg.p)return;const actor=String(msg.from||nknState.actorByAddr.get(src)||''),w=getNknWrapper(src,actor);w.lastSeen=Date.now();if(actor){nknState.actorByAddr.set(src,actor);registerPeerRoute(actor,w,nknPeerId(src),'nkn')}meshStatus.set('nkn','on');updateMeshState();const packet=b64ToBytes(msg.p);if(msg.k==='y')await onMeshY(packet,w);else if(msg.k==='aw')await onMeshAw(packet,w);else if(msg.k==='assetctl')await onMeshAssetCtl(packet,w,nknPeerId(src));else if(msg.k==='asset')await onMeshAsset(packet,w,nknPeerId(src));else await handleRouteControl(packet,w,nknPeerId(src))}
-function publishNknAddress(){if(!nknState.addr)return;const u=awareness.getLocalState()?.user||{};awareness.setLocalStateField('user',{...u,nknAddr:nknState.addr,actor:meshActor});for(const w of meshWrappers.values())if(w.meta)try{w.meta.send({actor:meshActor,nknAddr:nknState.addr,caps:['route-v1','bench-v1','asset-v1']})}catch(_){}publishNatsPresence().catch(()=>{})}
-async function startNkn(){
-  if(meshStopped)return false;if(nknState.client)return true;if(nknState.starting)return nknState.starting;const generation=++nknState.generation;meshStatus.set('nkn','loading');updateMeshState();
-  nknState.starting=(async()=>{try{const sdk=await loadNkn();if(meshStopped||generation!==nknState.generation)return false;const seed=localStorage.getItem('scratch-min-nkn-seed')||'',cfg={identifier:'scratch-min',numSubClients:NKN_SUBCLIENTS,originalClient:true,reconnectIntervalMin:1800,reconnectIntervalMax:30000,responseTimeout:5000};if(seed)cfg.seed=seed;if(location.protocol==='http:')cfg.rpcServerAddr=SIGNALING_ENDPOINTS.nkn[hash32(room)%SIGNALING_ENDPOINTS.nkn.length];const client=new sdk.MultiClient(cfg);if(meshStopped||generation!==nknState.generation){try{client.close?.()}catch(_){}return false}nknState.client=client;nknState.createdAt=Date.now();nknState.connected=false;const newSeed=client.getSeed?.()||client.defaultClient?.getSeed?.()||seed;if(newSeed)localStorage.setItem('scratch-min-nkn-seed',newSeed);nknState.addr=client.addr||client.defaultClient?.addr||'';client.onMessage(async({src,payload})=>{if(client!==nknState.client||generation!==nknState.generation)return false;try{await handleNknPayload(src,payload)}catch(_){}return null});client.onConnect(()=>{if(client!==nknState.client||generation!==nknState.generation)return;nknState.connected=true;nknState.lastConnectAt=Date.now();nknState.addr=client.addr||client.defaultClient?.addr||nknState.addr;meshStatus.set('nkn','ready');publishNknAddress();updateMeshState();syncNknFromAwareness()});meshStatus.set('nkn','connecting');updateMeshState();return true}catch(_){if(generation===nknState.generation){meshStatus.set('nkn','err');updateMeshState()}return false}finally{if(generation===nknState.generation)nknState.starting=null}})();return nknState.starting
-}
-function syncNknFromAwareness(){if(!nknState.connected)return;for(const[id,state]of awareness.getStates()){if(id===ydoc.clientID)continue;const a=state.user?.nknAddr,actor=state.user?.actor||'';if(a)ensureNknRoute(a,actor).catch(()=>{})}}
-function removeNknRoute(addr){const w=nknState.routes.get(addr);if(!w)return;w.peers.clear();unregisterWrapperRoutes(w);nknState.routes.delete(addr);nknState.actorByAddr.delete(addr);if(meshWrappers.get(w.name)===w)meshWrappers.delete(w.name)}
-function stopNkn(){nknState.generation++;nknState.starting=null;const client=nknState.client;nknState.client=null;nknState.connected=false;try{client?.close?.()}catch(_){}for(const w of nknState.routes.values()){unregisterWrapperRoutes(w);meshWrappers.delete(w.name)}nknState.routes.clear();nknState.actorByAddr.clear();nknState.chunks.clear();nknState.sendChains.clear();nknState.pendingSends=0}
-async function recycleNkn(reason='watchdog'){const now=Date.now();if(meshStopped||now-nknState.lastRecycleAt<NKN_RECYCLE_COOLDOWN_MS)return false;nknState.lastRecycleAt=now;nknState.recycles++;stopNkn();meshStatus.set('nkn','restarting');updateMeshState();await sleep(600+hash32(room)%900);return startNkn()}
-
-/* CGNAT-safe encrypted broker relays. These carry actual Yjs traffic over
-   outbound WSS, so synchronization does not depend on ICE succeeding. */
-const mqttRelayState={module:null,clients:new Map(),topic:'',ready:new Set(),starting:null};
-const MQTT_RELAY_CLIENTS=7,MQTT_MAX_PENDING=16;
+function stopNats(){for(const actor of [...natsState.sessions.keys()])closeNatsPeer(actor);for(const sub of [natsState.presence,natsState.signal,natsState.relay])try{sub?.unsubscribe()}catch(_){}const nc=natsState.nc;natsState.nc=null;try{Promise.resolve(nc?.close()).catch(()=>{})}catch(_){}endpointReleased(SIGNALING_ENDPOINTS.nats[0])}
+const mqttRelayState={module:null,clients:new Map(),ready:new Set(),topic:'',starting:null};
 async function importMqttRelay(){if(mqttRelayState.module)return mqttRelayState.module;let last;for(const u of [`https://esm.run/mqtt@${MQTTJS_VERSION}`,`https://esm.sh/mqtt@${MQTTJS_VERSION}?bundle`,`https://cdn.jsdelivr.net/npm/mqtt@${MQTTJS_VERSION}/+esm`]){try{const m=await import(u),api=m.connect?m:m.default;if(!api?.connect)throw new Error('mqtt connect missing');mqttRelayState.module=api;return api}catch(e){last=e}}throw last||new Error('MQTT.js unavailable')}
-async function mqttRelayEnvelope(kind,bytes=new Uint8Array()){return sealJson({v:6,kind,from:meshActor,ts:Date.now(),nknAddr:nknState.addr||'',p:bytes?.byteLength?bytesToB64(bytes):''})}
-async function handleMqttRelay(payload,url=''){try{const raw=typeof payload==='string'?payload:dec.decode(payload instanceof Uint8Array?payload:new Uint8Array(payload)),msg=await openJson(raw);if(msg?.v!==6||msg.from===meshActor||Math.abs(Date.now()-msg.ts)>120000)return;noteRelayActor(msg.from,msg.nknAddr,'mqtt');if(url)markEndpoint(url,'ok');meshStatus.set('mqtt-relay','on');updateMeshState();if(msg.kind==='hello'){respondRelayHello(msg.from,'mqtt').catch(()=>{});return}if(!['y','aw','assetctl'].includes(msg.kind)||!msg.p)return;await applyRelayPayload(msg.kind,b64ToBytes(msg.p),MQTT_RELAY_REMOTE)}catch(_){}}
-async function publishMqttRelay(kind,bytes){
-  if(!mqttRelayState.ready.size)return false;let payload;try{payload=await mqttRelayEnvelope(kind,bytes)}catch(_){return false}let ok=false;
-  for(const url of mqttRelayState.ready){const c=mqttRelayState.clients.get(url);if(!c?.connected||(c.padPending||0)>=MQTT_MAX_PENDING)continue;
-    c.padPending=(c.padPending||0)+1;
-    try{c.publish(mqttRelayState.topic,payload,{qos:1,retain:false},()=>{c.padPending=Math.max(0,c.padPending-1)});ok=true}catch(_){c.padPending=Math.max(0,c.padPending-1)}
+async function publishMqttRelay(kind,bytes=new Uint8Array(),waitAck=false){
+  if(!mqttRelayState.ready.size)return false;const generation=meshGeneration,payload=await sealJson({v:6,kind,from:meshActor,ts:Date.now(),p:bytes.byteLength?bytesToB64(bytes):''});
+  if(meshStopped||generation!==meshGeneration)return false;const jobs=[];
+  for(const url of mqttRelayState.ready){const c=mqttRelayState.clients.get(url);if(!c?.connected||c.padPending>=MQTT_MAX_PENDING)continue;
+    c.padPending++;jobs.push(new Promise(resolve=>{let done=false;const finish=error=>{if(done)return;done=true;clearTimeout(timer);c.padPending=Math.max(0,c.padPending-1);if(error&&mqttRelayState.clients.get(url)===c){retireMqttClient(url,true)}resolve(!error)},timer=setTimeout(()=>finish(new Error('publish timeout')),CONNECT_TIMEOUT_MS);try{c.publish(mqttRelayState.topic,payload,{qos:1,retain:false},finish)}catch(error){finish(error)}}));
   }
-  if(ok){meshStatus.set('mqtt-relay','on');updateMeshState()}return ok
+  if(!waitAck)return jobs.length>0;return jobs.length?(await Promise.all(jobs)).some(Boolean):false
 }
-function retireMqttClient(url){
-  const c=mqttRelayState.clients.get(url);mqttRelayState.clients.delete(url);mqttRelayState.ready.delete(url);
-  if(c)try{c.end(true)}catch(_){}
-}
+function retireMqttClient(url,failed=false){const c=mqttRelayState.clients.get(url);if(!c)return;clearTimeout(c.padConnectTimer);mqttRelayState.clients.delete(url);mqttRelayState.ready.delete(url);failed?endpointFailed(url):endpointReleased(url);try{c.end(true)}catch(_){}meshStatus.set('mqtt-relay',mqttRelayState.ready.size?'ready':'off');updateMeshState()}
 function startMqttRelay(){
-  if(meshStopped)return Promise.resolve(false);if(mqttRelayState.starting)return mqttRelayState.starting;
+  if(mqttRelayState.starting)return mqttRelayState.starting;
   const generation=meshGeneration;
-  const job=(async()=>{
-    meshStatus.set('mqtt-relay','loading');updateMeshState();
-    try{const mqtt=await importMqttRelay();if(meshStopped||generation!==meshGeneration)return false;
-      mqttRelayState.topic=`scratch/min/v3/${meshRoomName.replace(/[^a-z0-9]/gi,'').slice(-36)}`;
-      const urls=pickCandidates('mqtt',MQTT_RELAY_CLIENTS,9,meshEpochNow()),wanted=new Set(urls);
-      for(const url of mqttRelayState.clients.keys())if(!wanted.has(url))retireMqttClient(url);
-      for(const url of urls){if(mqttRelayState.clients.has(url))continue;markEndpoint(url,'try');
-        const c=mqtt.connect(url,{clientId:`scratch_${meshActor.replace(/-/g,'').slice(0,16)}_${hash32(url).toString(16)}`,clean:true,keepalive:25,reconnectPeriod:1800,connectTimeout:6500,resubscribe:true,protocolVersion:4,queueQoSZero:false});
-        mqttRelayState.clients.set(url,c);const current=()=>!meshStopped&&generation===meshGeneration&&mqttRelayState.clients.get(url)===c;
-        c.on('connect',()=>{if(!current())return;mqttRelayState.ready.add(url);meshStatus.set('mqtt-relay','ready');c.subscribe(mqttRelayState.topic,{qos:1},()=>{if(!current())return;publishMqttRelay('hello').catch(()=>{});publishMqttRelay('y',Y.encodeStateAsUpdate(ydoc)).catch(()=>{});publishMqttRelay('aw',encodeAwarenessUpdate(awareness,[ydoc.clientID])).catch(()=>{})});updateMeshState()});
-        c.on('message',(topic,payload)=>{if(current()&&topic===mqttRelayState.topic)handleMqttRelay(payload,url)});
-        c.on('close',()=>{if(!current())return;mqttRelayState.ready.delete(url);meshStatus.set('mqtt-relay',mqttRelayState.ready.size?'ready':'degraded');updateMeshState()});c.on('error',()=>{})
-      }
-      meshStatus.set('mqtt-relay',mqttRelayState.ready.size?'ready':'connecting');updateMeshState();return true
-    }catch(_){if(generation===meshGeneration){meshStatus.set('mqtt-relay','err');updateMeshState()}return false}
-  })().finally(()=>{if(mqttRelayState.starting===job)mqttRelayState.starting=null});
-  mqttRelayState.starting=job;return job
+  const job=(async()=>{try{
+    if(!SIGNALING_ENDPOINTS.mqtt.some(url=>!mqttRelayState.clients.has(url)&&networkMayConnect()&&Date.now()>=endpointState(url).nextAttempt))return false;
+    const mqtt=await withDeadline(importMqttRelay());if(meshStopped||generation!==meshGeneration)return false;
+    mqttRelayState.topic=`scratch/min/v3/${meshRoomName.replace(/[^a-z0-9]/gi,'').slice(-36)}`;
+    for(const url of SIGNALING_ENDPOINTS.mqtt){if(mqttRelayState.clients.size>=MQTT_RELAY_CLIENTS)break;if(mqttRelayState.clients.has(url)||!beginEndpoint(url))continue;
+      let c;try{c=mqtt.connect(url,{clientId:`scratch_${meshActor.replace(/-/g,'').slice(0,16)}_${hash32(url).toString(16)}`,clean:true,keepalive:30,reconnectPeriod:0,reconnectOnConnackError:false,connectTimeout:CONNECT_TIMEOUT_MS,protocolVersion:4,queueQoSZero:false,resubscribe:false})}catch(_){endpointFailed(url);continue}
+      c.padPending=0;mqttRelayState.clients.set(url,c);const current=()=>!meshStopped&&generation===meshGeneration&&mqttRelayState.clients.get(url)===c;
+      c.padConnectTimer=setTimeout(()=>{if(current())retireMqttClient(url,true)},CONNECT_TIMEOUT_MS);
+      c.on('connect',()=>{if(!current())return;clearTimeout(c.padConnectTimer);endpointOpened(url);c.subscribe(mqttRelayState.topic,{qos:1},error=>{if(!current())return;if(error){retireMqttClient(url,true);return}mqttRelayState.ready.add(url);meshStatus.set('mqtt-relay','ready');publishMqttRelay('hello').catch(()=>{});updateMeshState()})});
+      c.on('message',(topic,payload)=>{if(current()&&topic===mqttRelayState.topic)handleMqttRelay(payload,url)});
+      c.on('close',()=>{if(current())retireMqttClient(url,true)});c.on('error',()=>{if(current())retireMqttClient(url,true)})
+    }
+    return true
+  }catch(_){meshPlaneRetryAt.set('mqtt-module',Date.now()+CONNECT_RETRY_MS);return false}})().finally(()=>{if(mqttRelayState.starting===job)mqttRelayState.starting=null});mqttRelayState.starting=job;return job
 }
-function stopMqttRelay(){for(const url of [...mqttRelayState.clients.keys()])retireMqttClient(url);mqttRelayState.ready.clear()}
-
-const nostrRelayState={module:null,pool:null,sk:null,pubkey:'',relays:[],sub:null,tag:'',lastRx:0,startedAt:0,starting:null,generation:0,pending:0};
-async function importNostrRelay(){if(nostrRelayState.module)return nostrRelayState.module;let last;for(const u of [`https://esm.sh/nostr-tools@${NOSTR_TOOLS_VERSION}?bundle`,`https://esm.run/nostr-tools@${NOSTR_TOOLS_VERSION}`,`https://cdn.jsdelivr.net/npm/nostr-tools@${NOSTR_TOOLS_VERSION}/+esm`]){try{const m=await import(u);if(!m.SimplePool||!m.generateSecretKey||!m.finalizeEvent)throw new Error('nostr-tools exports missing');nostrRelayState.module=m;return m}catch(e){last=e}}throw last||new Error('nostr-tools unavailable')}
-async function handleNostrRelay(ev){try{const msg=await openJson(ev.content);if(msg?.v!==7||msg.from===meshActor||Math.abs(Date.now()-msg.ts)>120000)return;noteRelayActor(msg.from,msg.nknAddr,'nostr');nostrRelayState.lastRx=Date.now();meshStatus.set('nostr-relay','on');updateMeshState();if(msg.kind==='hello'){respondRelayHello(msg.from,'nostr').catch(()=>{});return}if(!['y','aw','assetctl'].includes(msg.kind)||!msg.p)return;await applyRelayPayload(msg.kind,b64ToBytes(msg.p),NOSTR_RELAY_REMOTE)}catch(_){}}
+function stopMqttRelay(){for(const url of [...mqttRelayState.clients.keys()])retireMqttClient(url)}
+const nostrRelayState={module:null,clients:new Map(),ready:new Set(),sk:null,pubkey:'',tag:'',starting:null,pending:0,lastRx:0};
+async function importNostrRelay(){if(nostrRelayState.module)return nostrRelayState.module;let last;for(const u of [`https://esm.sh/nostr-tools@${NOSTR_TOOLS_VERSION}?bundle`,`https://esm.run/nostr-tools@${NOSTR_TOOLS_VERSION}`,`https://cdn.jsdelivr.net/npm/nostr-tools@${NOSTR_TOOLS_VERSION}/+esm`]){try{const m=await import(u);if(!m.verifyEvent||!m.generateSecretKey||!m.finalizeEvent)throw new Error('nostr-tools exports missing');nostrRelayState.module=m;return m}catch(e){last=e}}throw last||new Error('nostr-tools unavailable')}
 async function publishNostrRelay(kind,bytes=new Uint8Array()){
-  const pool=nostrRelayState.pool,generation=nostrRelayState.generation;
-  if(!pool||!nostrRelayState.sk||bytes.byteLength>48000||nostrRelayState.pending>=16)return false;
-  nostrRelayState.pending++;
-  try{const m=nostrRelayState.module,content=await sealJson({v:7,kind,from:meshActor,ts:Date.now(),nknAddr:nknState.addr||'',p:bytes?.byteLength?bytesToB64(bytes):''});
-    if(pool!==nostrRelayState.pool||generation!==nostrRelayState.generation)return false;
-    const ev=m.finalizeEvent({kind:20001,created_at:Math.floor(Date.now()/1000),tags:[['d',nostrRelayState.tag]],content},nostrRelayState.sk);
-    await Promise.allSettled(pool.publish(nostrRelayState.relays,ev));
-    if(pool===nostrRelayState.pool){meshStatus.set('nostr-relay','on');updateMeshState()}return true
-  }catch(_){return false}finally{if(generation===nostrRelayState.generation)nostrRelayState.pending=Math.max(0,nostrRelayState.pending-1)}
+  if(!nostrRelayState.ready.size||bytes.byteLength>48000||nostrRelayState.pending>=16)return false;
+  const generation=meshGeneration;nostrRelayState.pending++;
+  try{const content=await sealJson({v:7,kind,from:meshActor,ts:Date.now(),p:bytes.byteLength?bytesToB64(bytes):''});if(meshStopped||generation!==meshGeneration)return false;
+    const ev=nostrRelayState.module.finalizeEvent({kind:20001,created_at:Math.floor(Date.now()/1000),tags:[['d',nostrRelayState.tag]],content},nostrRelayState.sk),frame=JSON.stringify(['EVENT',ev]);let sent=false;
+    for(const url of nostrRelayState.ready){const socket=nostrRelayState.clients.get(url)?.socket;if(socket?.readyState===WebSocket.OPEN&&socket.bufferedAmount<256*1024){socket.send(frame);sent=true}}return sent
+  }catch(_){return false}finally{nostrRelayState.pending=Math.max(0,nostrRelayState.pending-1)}
 }
+function retireNostrClient(url,failed=false){const x=nostrRelayState.clients.get(url);if(!x)return;clearTimeout(x.timer);nostrRelayState.clients.delete(url);nostrRelayState.ready.delete(url);failed?endpointFailed(url):endpointReleased(url);if(x.socket){x.socket.onopen=x.socket.onclose=x.socket.onerror=x.socket.onmessage=null;try{x.socket.close()}catch(_){}}meshStatus.set('nostr-relay',nostrRelayState.ready.size?'ready':'off');updateMeshState()}
 function startNostrRelay(){
-  if(meshStopped)return Promise.resolve(false);if(nostrRelayState.pool)return Promise.resolve(true);if(nostrRelayState.starting)return nostrRelayState.starting;
-  const generation=nostrRelayState.generation,meshGen=meshGeneration,current=()=>!meshStopped&&generation===nostrRelayState.generation&&meshGen===meshGeneration;
-  const job=(async()=>{meshStatus.set('nostr-relay','loading');updateMeshState();
-    try{const m=await importNostrRelay(),tag=(await sha256Hex('relay:'+meshRoomName)).slice(0,32);if(!current())return false;
-      nostrRelayState.relays=pickCandidates('nostr',12,11,meshEpochNow());nostrRelayState.tag=tag;
-      const saved=localStorage.getItem('scratch-min-nostr-sk');if(saved){try{nostrRelayState.sk=b64ToBytes(saved)}catch(_){}}
-      if(!nostrRelayState.sk||nostrRelayState.sk.length!==32){nostrRelayState.sk=m.generateSecretKey();localStorage.setItem('scratch-min-nostr-sk',bytesToB64(nostrRelayState.sk))}
-      nostrRelayState.pubkey=m.getPublicKey(nostrRelayState.sk);nostrRelayState.pool=new m.SimplePool();nostrRelayState.startedAt=Date.now();
-      nostrRelayState.sub=nostrRelayState.pool.subscribeMany(nostrRelayState.relays,{kinds:[20001],'#d':[tag],since:Math.floor(Date.now()/1000)-20},{onevent:ev=>{if(current())handleNostrRelay(ev)}});
-      meshStatus.set('nostr-relay','ready');await publishNostrRelay('hello');const full=Y.encodeStateAsUpdate(ydoc);if(full.byteLength<=48000)await publishNostrRelay('y',full);await publishNostrRelay('aw',encodeAwarenessUpdate(awareness,[ydoc.clientID]));if(current())updateMeshState();return current()
-    }catch(_){if(current()){stopNostrRelay();meshStatus.set('nostr-relay','err');updateMeshState()}return false}
-  })().finally(()=>{if(nostrRelayState.starting===job)nostrRelayState.starting=null});nostrRelayState.starting=job;return job
+  if(nostrRelayState.starting)return nostrRelayState.starting;const generation=meshGeneration;
+  const job=(async()=>{try{
+    if(nostrRelayState.clients.size>=NOSTR_RELAY_CLIENTS||!networkMayConnect())return false;
+    const m=await withDeadline(importNostrRelay()),tag=(await sha256Hex('relay:'+meshRoomName)).slice(0,32);if(meshStopped||generation!==meshGeneration)return false;
+    nostrRelayState.tag=tag;if(!nostrRelayState.sk){try{nostrRelayState.sk=b64ToBytes(localStorage.getItem('scratch-min-nostr-sk')||'')}catch(_){}if(nostrRelayState.sk?.length!==32){nostrRelayState.sk=m.generateSecretKey();localStorage.setItem('scratch-min-nostr-sk',bytesToB64(nostrRelayState.sk))}nostrRelayState.pubkey=m.getPublicKey(nostrRelayState.sk)}
+    for(const url of SIGNALING_ENDPOINTS.nostr){if(nostrRelayState.clients.size>=NOSTR_RELAY_CLIENTS)break;if(nostrRelayState.clients.has(url)||!beginEndpoint(url))continue;
+      const x={socket:null,timer:0,pending:0};nostrRelayState.clients.set(url,x);const current=()=>!meshStopped&&generation===meshGeneration&&nostrRelayState.clients.get(url)===x;
+      try{x.socket=new WebSocket(url)}catch(_){retireNostrClient(url,true);continue}
+      x.timer=setTimeout(()=>{if(current())retireNostrClient(url,true)},CONNECT_TIMEOUT_MS);
+      x.socket.onopen=()=>{if(!current())return;clearTimeout(x.timer);endpointOpened(url);nostrRelayState.ready.add(url);meshStatus.set('nostr-relay','ready');x.socket.send(JSON.stringify(['REQ','pad',{kinds:[20001],'#d':[tag],since:Math.floor(Date.now()/1000)-20,limit:50}]));publishNostrRelay('hello').catch(()=>{});updateMeshState()};
+      x.socket.onerror=x.socket.onclose=()=>{if(current())retireNostrClient(url,true)};
+      x.socket.onmessage=e=>{if(!current()||typeof e.data!=='string'||e.data.length>200000||x.pending>=16)return;let frame;try{frame=JSON.parse(e.data)}catch(_){return}if(frame[0]==='CLOSED'||frame[0]==='OK'&&frame[2]===false&&!/duplicate/.test(frame[3]||'')){retireNostrClient(url,true);return}const ev=frame[2];if(frame[0]!=='EVENT'||ev?.kind!==20001||!ev.tags?.some(t=>t[0]==='d'&&t[1]===tag)||Math.abs(Date.now()/1000-ev.created_at)>120)return;x.pending++;Promise.resolve().then(()=>{if(current()&&m.verifyEvent(ev))return handleNostrRelay(ev)}).catch(()=>{}).finally(()=>x.pending--)}
+    }
+    return true
+  }catch(_){meshPlaneRetryAt.set('nostr-module',Date.now()+CONNECT_RETRY_MS);return false}})().finally(()=>{if(nostrRelayState.starting===job)nostrRelayState.starting=null});nostrRelayState.starting=job;return job
 }
-function stopNostrRelay(){nostrRelayState.generation++;nostrRelayState.pending=0;try{Promise.resolve(nostrRelayState.sub?.close?.()).catch(()=>{})}catch(_){}try{nostrRelayState.pool?.close?.(nostrRelayState.relays)}catch(_){}nostrRelayState.pool=null;nostrRelayState.sub=null}
-async function relayBroadcast(kind,bytes,exceptOrigin=null){const jobs=[];if(exceptOrigin!==NATS_RELAY_REMOTE)jobs.push(publishNatsRelay(kind,bytes));if(exceptOrigin!==MQTT_RELAY_REMOTE)jobs.push(publishMqttRelay(kind,bytes));if(exceptOrigin!==NOSTR_RELAY_REMOTE)jobs.push(publishNostrRelay(kind,bytes));await Promise.allSettled(jobs)}
-
-function meshSupervisorTick(){
-  if(meshSupervisorJob||meshStopped)return meshSupervisorJob||Promise.resolve();
-  const job=meshSupervisorTickNow().finally(()=>{if(meshSupervisorJob===job)meshSupervisorJob=null});meshSupervisorJob=job;return job
-}
+function stopNostrRelay(){for(const url of [...nostrRelayState.clients.keys()])retireNostrClient(url)}
+async function handleRelayEnvelope(msg,version,plane,origin){if(msg?.v!==version||!msg.from||msg.from===meshActor||Math.abs(Date.now()-msg.ts)>120000)return;noteRelayActor(msg.from,'',plane);if(msg.kind==='hello'){respondRelayHello(msg.from,plane).catch(()=>{});return}if(!msg.p)return;const bytes=b64ToBytes(msg.p);if(msg.kind==='packet'){await applyPeerPacket(bytes);return}if(['y','aw','assetctl'].includes(msg.kind))await applyRelayPayload(msg.kind,bytes,origin)}
+async function handleMqttRelay(payload){try{await handleRelayEnvelope(await openJson(typeof payload==='string'?payload:dec.decode(payload)),6,'mqtt',MQTT_RELAY_REMOTE)}catch(_){}}
+async function handleNostrRelay(ev){try{await handleRelayEnvelope(await openJson(ev.content),7,'nostr',NOSTR_RELAY_REMOTE);nostrRelayState.lastRx=Date.now()}catch(_){}}
+async function handleNatsRelay(raw){try{await handleRelayEnvelope(await openJson(dec.decode(raw)),5,'nats',NATS_RELAY_REMOTE)}catch(_){}}
+async function relayBroadcast(kind,bytes,exceptOrigin=null){await Promise.allSettled([exceptOrigin!==NATS_RELAY_REMOTE&&publishNatsRelay(kind,bytes),exceptOrigin!==MQTT_RELAY_REMOTE&&publishMqttRelay(kind,bytes),exceptOrigin!==NOSTR_RELAY_REMOTE&&publishNostrRelay(kind,bytes)])}
+function meshSupervisorTick(){if(meshSupervisorJob||meshStopped)return meshSupervisorJob||Promise.resolve();const job=meshSupervisorTickNow().finally(()=>{if(meshSupervisorJob===job)meshSupervisorJob=null});meshSupervisorJob=job;return job}
 async function meshSupervisorTickNow(){
-  if(meshStopped)return;const generation=meshGeneration,now=Date.now(),epoch=meshEpochNow();meshPruneSeen();
-  try{await Promise.allSettled([publishNatsPresence(),publishNatsRelay('hello'),publishMqttRelay('hello'),publishNostrRelay('hello')])}catch(_){}
-  if(meshStopped||generation!==meshGeneration)return;
-  if(now-meshLastAwSync>=MESH_RENDEZVOUS_MS){meshLastAwSync=now;const aw=encodeAwarenessUpdate(awareness,[ydoc.clientID]);meshSeenRecently('aw',aw);adaptiveMeshBroadcast('aw',aw,null,{repair:false}).catch(()=>{});for(const w of meshWrappers.values())if(w.meta)try{w.meta.send({actor:meshActor,nknAddr:nknState.addr||'',ts:now,caps:['route-v1','bench-v1','asset-v1']})}catch(_){} }
-  if(now-meshLastFullSync>=MESH_FULLSYNC_MS){meshLastFullSync=now;const full=Y.encodeStateAsUpdate(ydoc);meshSeenRecently('y',full);adaptiveMeshBroadcast('y',full,null,{repair:true}).catch(()=>{})}
-  if(nknState.connected)syncNknFromAwareness();
-  if(epoch!==meshEpoch){meshEpoch=epoch;meshLastRotate=now;rotateIdleStrategies(epoch).catch(()=>{});startMqttRelay().catch(()=>{});if(!nostrRelayState.lastRx||now-nostrRelayState.lastRx>12000||now-nostrRelayState.startedAt>120000){stopNostrRelay();startNostrRelay().catch(()=>{})}}
-  const retry=(key,fn,gap=12000)=>{const last=meshPlaneRetryAt.get(key)||0;if(now-last<gap)return;meshPlaneRetryAt.set(key,now);Promise.resolve().then(fn).catch(()=>{})};
-  if(!natsState.nc&&meshStatus.get('nats')!=='loading')retry('nats',startNats,10000);
-  if(!nknState.client&&!nknState.starting&&meshStatus.get('nkn')!=='loading')retry('nkn',startNkn,12000);else if(nknState.client&&!nknState.connected&&nknState.createdAt&&now-nknState.createdAt>NKN_CONNECT_WATCHDOG_MS)retry('nkn-watchdog',()=>recycleNkn('connect-timeout'),NKN_RECYCLE_COOLDOWN_MS);
-  if(!mqttRelayState.clients.size||(!mqttRelayState.ready.size&&meshStatus.get('mqtt-relay')!=='loading'))retry('mqtt-relay',startMqttRelay,9000);
-  if(!nostrRelayState.pool&&meshStatus.get('nostr-relay')!=='loading')retry('nostr-relay',startNostrRelay,9000);
-  for(const[name,spec]of Object.entries(MESH_STRATEGIES))for(let shard=0;shard<spec.shards;shard++){const key=`${name}:${shard}`,w=meshWrappers.get(key),st=meshStatus.get(key);if((!w||st==='err')&&now-(w?.joinedAt||0)>5000)retry(key,()=>joinStrategy(name,shard,epoch),8000)}
-  prunePeerRoutes(now);probeAllPeerRoutes().catch(()=>{});updateMeshState()
+  if(meshStopped)return;meshPruneSeen();prunePeerRoutes();
+  if(networkMayConnect()){startNats().catch(()=>{});if(Date.now()>=(meshPlaneRetryAt.get('mqtt-module')||0))startMqttRelay().catch(()=>{});if(Date.now()>=(meshPlaneRetryAt.get('nostr-module')||0))startNostrRelay().catch(()=>{})}
+  const now=Date.now();if(now-meshLastAwSync>=MESH_RENDEZVOUS_MS){meshLastAwSync=now;await Promise.allSettled([publishNatsPresence(),relayBroadcast('hello',new Uint8Array()),relayBroadcast('aw',encodeAwarenessUpdate(awareness,[ydoc.clientID]))])}
+  if(!meshStopped&&now-meshLastFullSync>=MESH_FULLSYNC_MS){meshLastFullSync=now;const full=Y.encodeStateAsUpdate(ydoc);meshSeenRecently('y',full);adaptiveMeshBroadcast('y',full,null,{repair:true}).catch(()=>{})}updateMeshState()
 }
-async function startMesh(){meshStopped=false;const generation=meshGeneration;meshRoomName='scratch-v3:'+(await sha256Hex(MESH_APP_ID+':'+room)).slice(0,40);meshEpoch=meshEpochNow();await refreshTurnIce().catch(()=>{});const jobs=[];for(const[name,spec]of Object.entries(MESH_STRATEGIES))for(let shard=0;shard<spec.shards;shard++)jobs.push(joinStrategy(name,shard,meshEpoch));jobs.push(startNats(),startNkn(),startMqttRelay(),startNostrRelay());const r=await Promise.allSettled(jobs);if(meshStopped||generation!==meshGeneration)return false;meshReady=r.some(x=>x.status==='fulfilled'&&x.value);clearInterval(meshSupervisorTimer);meshSupervisorTimer=setInterval(()=>meshSupervisorTick().catch(()=>{}),MESH_RENDEZVOUS_MS);clearInterval(routeProbeTimer);routeProbeTimer=setInterval(()=>probeAllPeerRoutes().catch(()=>{}),ROUTE_PROBE_MS);meshSupervisorTick().catch(()=>{});updateMeshState();return meshReady}
-function stopMesh(){meshStopped=true;meshGeneration++;for(const timer of meshRotationTimers.values())clearTimeout(timer);meshRotationTimers.clear();clearInterval(meshSupervisorTimer);clearInterval(routeProbeTimer);meshSupervisorTimer=0;routeProbeTimer=0;for(const w of [...meshWrappers.values()]){w.retiring=true;w.leavePromise ||= Promise.resolve().then(()=>w.room.leave?.()).catch(()=>{})}meshWrappers.clear();peerRoutes.clear();peerPrimaryRoute.clear();routePeerActors.clear();for(const x of routeBenchPending.values()){clearTimeout(x.timer);x.resolve?.(false)}routeBenchPending.clear();stopNats();stopNkn();stopMqttRelay();stopNostrRelay();try{bc?.close()}catch(_){}meshReady=false}
-window.ScratchMesh={endpointCount:SIGNALING_ENDPOINT_TOTAL,endpoints:SIGNALING_ENDPOINTS,status:()=>Object.fromEntries(meshStatus),routes:()=>[...meshWrappers.values()].map(w=>({name:w.name,strategy:w.strategy,peers:w.peers.size,actor:w.actor||null,epoch:w.epoch,urls:w.urls||null})),peerRoutes:()=>Object.fromEntries([...peerRoutes].map(([actor,m])=>[actor,[...m.values()].map(routeDescriptor)])),primaries:()=>Object.fromEntries([...peerPrimaryRoute].map(([actor,id])=>[actor,routeDescriptor(peerRoutes.get(actor)?.get(id)||{})])),probeRoutes:()=>probeAllPeerRoutes(),supervisor:()=>({epoch:meshEpoch,interval:MESH_RENDEZVOUS_MS,fullSync:MESH_FULLSYNC_MS,relayActors:Object.fromEntries(relayActors),seen:meshSeen.size,stopped:meshStopped}),endpointHealth:()=>Object.fromEntries(meshEndpointHealth),nkn:()=>({connected:nknState.connected,address:nknState.addr,routes:nknState.routes.size,subclients:nknState.client?.readyClientIDs?.().length||0,configuredSubclients:NKN_SUBCLIENTS,pendingSends:nknState.pendingSends,droppedSends:nknState.droppedSends,chunks:nknState.chunks.size,recycles:nknState.recycles,createdAt:nknState.createdAt,lastConnectAt:nknState.lastConnectAt,logGuard:window.PADNknLogs?.stats?.()||null}),nats:()=>({connected:!!natsState.nc,sessions:natsState.sessions.size,relay:!!natsState.relay}),mqtt:()=>({brokers:[...mqttRelayState.ready],topic:mqttRelayState.topic}),nostrRelay:()=>({relays:nostrRelayState.relays,pubkey:nostrRelayState.pubkey,lastRx:nostrRelayState.lastRx}),turn:()=>({servers:storedTurnIce(),policy:rtcConfig().iceTransportPolicy}),setTurn:(iceServers)=>{const v=normalizeIceServers(iceServers);localStorage.setItem('scratch-min-turn-ice',JSON.stringify(v));runtimeTurnIce=v;return v},setTurnCredentialUrl:(url)=>{if(url)localStorage.setItem('scratch-min-turn-url',String(url));else localStorage.removeItem('scratch-min-turn-url');return refreshTurnIce()},forceRelayIce:(on=true)=>{localStorage.setItem('scratch-min-ice-policy',on?'relay':'all');return rtcConfig().iceTransportPolicy},handshake:()=>meshSupervisorTick(),cache:()=>({room,hydrated:roomCacheHydrated,pageCount:pageOrder.length,activePage,localHot:!!localStorage.getItem(ROOM_CACHE_LOCAL+room)})};
+async function startMesh(){meshStopped=false;const generation=meshGeneration;meshRoomName='scratch-v3:'+(await sha256Hex(MESH_APP_ID+':'+room)).slice(0,40);await refreshTurnIce().catch(()=>{});if(meshStopped||generation!==meshGeneration)return false;meshSupervisorTimer=setInterval(()=>meshSupervisorTick().catch(()=>{}),MESH_RENDEZVOUS_MS);routeProbeTimer=setInterval(()=>probeAllPeerRoutes().catch(()=>{}),ROUTE_PROBE_MS);await Promise.allSettled([startNats(),startMqttRelay(),startNostrRelay()]);if(meshStopped||generation!==meshGeneration)return false;meshSupervisorTick().catch(()=>{});updateMeshState();return meshReady}
+function stopMesh(){meshStopped=true;meshGeneration++;clearInterval(meshSupervisorTimer);clearInterval(routeProbeTimer);stopNats();stopMqttRelay();stopNostrRelay();meshWrappers.clear();peerRoutes.clear();peerPrimaryRoute.clear();routePeerActors.clear();relayActors.clear();for(const x of routeBenchPending.values()){clearTimeout(x.timer);x.resolve(false)}routeBenchPending.clear();try{bc?.close()}catch(_){}meshReady=false}
+window.ScratchMesh={endpointCount:SIGNALING_ENDPOINT_TOTAL,endpoints:SIGNALING_ENDPOINTS,status:()=>Object.fromEntries(meshStatus),routes:()=>[...meshWrappers.values()].map(w=>({name:w.name,strategy:w.strategy,actor:w.actor,peers:w.peers.size})),peerRoutes:()=>Object.fromEntries([...peerRoutes].map(([a,m])=>[a,[...m.values()].map(routeDescriptor)])),endpointHealth:()=>Object.fromEntries(meshEndpointHealth),handshake:meshSupervisorTick,probeRoutes:probeAllPeerRoutes,nats:()=>({connected:!!natsState.nc,sessions:natsState.sessions.size}),mqtt:()=>({brokers:[...mqttRelayState.ready]}),nostrRelay:()=>({relays:[...nostrRelayState.ready]}),network:()=>({attempts:connectAttempts.length,maxAttemptsPerMinute:CONNECT_ATTEMPTS_PER_MINUTE,mqtt:mqttRelayState.clients.size,nostr:nostrRelayState.clients.size,nats:!!natsState.nc,rtc:natsState.sessions.size}),turn:()=>rtcConfig(),setTurn:servers=>{localStorage.setItem('scratch-min-turn-ice',JSON.stringify(normalizeIceServers(servers)));return rtcConfig()},setTurnCredentialUrl:url=>{if(url)localStorage.setItem('scratch-min-turn-url',url);else localStorage.removeItem('scratch-min-turn-url');return refreshTurnIce()},forceRelayIce:(on=true)=>{localStorage.setItem('scratch-min-ice-policy',on?'relay':'all');return rtcConfig().iceTransportPolicy}};
+window.addEventListener('online',()=>meshSupervisorTick().catch(()=>{}));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')meshSupervisorTick().catch(()=>{});else{for(const[url,c]of mqttRelayState.clients)if(!mqttRelayState.ready.has(url))retireMqttClient(url,true);for(const url of nostrRelayState.clients.keys())if(!nostrRelayState.ready.has(url))retireNostrClient(url,true)}});
 
 /* Local CRDT updates go out over every healthy discovery plane. Remote updates
    are not echoed back across planes; all clients join the same redundant planes,
    which prevents update storms while retaining signaling redundancy. */
 ydoc.on('update',(update,origin)=>{if(origin===REMOTE_EDIT_ORIGIN||origin===BC_REMOTE||meshWrappersHas(origin)||isRelayOrigin(origin))return;if(meshSeenRecently('y',update))return;adaptiveMeshBroadcast('y',update,null,{repair:false}).catch(()=>{})});
 function meshWrappersHas(origin){for(const w of meshWrappers.values())if(w===origin)return true;return false}
-awareness.on('update',({added,updated,removed},origin)=>{if(meshWrappersHas(origin)||origin===BC_REMOTE||isRelayOrigin(origin))return;const ids=[...added,...updated,...removed];if(ids.length){const u=encodeAwarenessUpdate(awareness,ids);if(meshSeenRecently('aw',u))return;adaptiveMeshBroadcast('aw',u,null,{repair:false}).catch(()=>{})}});
-if(bc){bc.onmessage=e=>{const m=e.data;if(!m?.packet)return;openMesh(m.packet).then(async u=>{if(meshSeenRecently(m.kind,u))return;if(m.kind==='y'){receivedRemoteSync=true;queueRemoteYUpdate(u)}else if(m.kind==='aw')applyAwarenessUpdate(awareness,u,BC_REMOTE);else if(m.kind==='assetctl')await handleAssetControlBytes(u,null,null);adaptiveMeshBroadcast(m.kind,u,BC_REMOTE,{repair:false}).catch(()=>{})}).catch(()=>{})};bc.postMessage({kind:'hello'});const old=bc.onmessage;bc.onmessage=e=>{const m=e.data;if(m?.kind==='hello'){sealMesh(Y.encodeStateAsUpdate(ydoc)).then(packet=>bc.postMessage({kind:'y',packet}));sealMesh(encodeAwarenessUpdate(awareness,[ydoc.clientID])).then(packet=>bc.postMessage({kind:'aw',packet}));return}old(e)}}
+let awarenessSendTimer=0,awarenessSending=false;const awarenessPending=new Set();
+function scheduleAwarenessSend(){if(awarenessSendTimer||awarenessSending||meshStopped)return;awarenessSendTimer=setTimeout(async()=>{awarenessSendTimer=0;const ids=[...awarenessPending];awarenessPending.clear();awarenessSending=true;try{const bytes=encodeAwarenessUpdate(awareness,ids);meshSeenRecently('aw',bytes);await adaptiveMeshBroadcast('aw',bytes)}catch(_){}finally{awarenessSending=false;if(awarenessPending.size)scheduleAwarenessSend()}},document.visibilityState==='visible'?100:1000)}
+awareness.on('update',({added,updated,removed},origin)=>{if(meshWrappersHas(origin)||origin===BC_REMOTE||isRelayOrigin(origin))return;for(const id of [...added,...updated,...removed])awarenessPending.add(id);scheduleAwarenessSend()});
 
-setInterval(()=>{const now=Date.now();for(const[k,v]of nknState.chunks)if(now-v.ts>45000)nknState.chunks.delete(k);if(nknState.sendChains.size>64&&!nknState.pendingSends)nknState.sendChains.clear();meshPruneSeen();updateMeshState()},30000);
+if(bc){bc.onmessage=e=>{const m=e.data;if(!m?.packet)return;openMesh(m.packet).then(async u=>{if(m.kind==='peer-packet'){await applyPeerPacket(u);return}if(m.from)noteRelayActor(m.from,'','bc');if(meshSeenRecently(m.kind,u))return;if(m.kind==='y'){receivedRemoteSync=true;queueRemoteYUpdate(u)}else if(m.kind==='aw')applyAwarenessUpdate(awareness,u,BC_REMOTE);else if(m.kind==='assetctl')await handleAssetControlBytes(u,null,null);adaptiveMeshBroadcast(m.kind,u,BC_REMOTE,{repair:false}).catch(()=>{})}).catch(()=>{})};bc.postMessage({kind:'hello'});const old=bc.onmessage;bc.onmessage=e=>{const m=e.data;if(m?.kind==='hello'){sealMesh(Y.encodeStateAsUpdate(ydoc)).then(packet=>bc.postMessage({kind:'y',packet}));sealMesh(encodeAwarenessUpdate(awareness,[ydoc.clientID])).then(packet=>bc.postMessage({kind:'aw',packet}));return}old(e)}}
+
 
 /* --------------------------------------------------------------------------
    PAGE MEDIA V1
@@ -586,7 +438,7 @@ setInterval(()=>{const now=Date.now();for(const[k,v]of nknState.chunks)if(now-v.
    IndexedDB and requested peer-to-peer only when absent. Large blobs therefore
    never become part of Yjs snapshots, awareness, or the recurring full sync.
    -------------------------------------------------------------------------- */
-const MEDIA_DB='pad-media-cache-v1',MEDIA_STORE='assets',MEDIA_MAX_BYTES=128*1024*1024,MEDIA_CHUNK=24*1024,MEDIA_NKN_CHUNK=8*1024,MEDIA_NKN_MAX=768*1024;
+const MEDIA_DB='pad-media-cache-v1',MEDIA_STORE='assets',MEDIA_MAX_BYTES=128*1024*1024,MEDIA_CHUNK=24*1024;
 const MEDIA_ORIGIN={name:'page-media'};
 const MEDIA_CACHE_BYTES=32*1024*1024,MEDIA_CACHE_ITEMS=32,MEDIA_MAX_TRANSFERS=4;
 const mediaMem=new Map(),mediaUrls=new Map(),mediaRequestAt=new Map(),mediaRx=new Map(),mediaTx=new Map(),mediaLoads=new Map(),mediaUrlLoads=new Map();
@@ -669,8 +521,8 @@ function parseAssetChunk(bytes){if(!(bytes instanceof Uint8Array)||bytes.length<
 function bestAssetRoute(actor){const routes=healthyRoutesFor(actor).filter(r=>r.wrapper?.asset?.send);return routes.find(r=>r.strategy!=='nkn')||routes[0]||null}
 async function assetControlSend(w,peerId,obj){if(!w?.assetCtl?.send)return false;try{const packet=await sealMesh(enc.encode(JSON.stringify(obj)));await w.assetCtl.send(packet,{target:peerId});return true}catch(_){return false}}
 async function broadcastAssetNeed(hash){const now=Date.now();if(now-(mediaRequestAt.get(hash)||0)<4500)return false;mediaRequestAt.set(hash,now);const bytes=enc.encode(JSON.stringify({v:1,t:'need',hash,from:meshActor,ts:now}));meshSeenRecently('assetctl',bytes);await adaptiveMeshBroadcast('assetctl',bytes,null,{repair:true});return true}
-async function handleAssetControlBytes(bytes,w,peerId){let msg;try{msg=JSON.parse(dec.decode(bytes))}catch(_){return}if(msg?.v!==1||!msg.hash||msg.from===meshActor||Math.abs(Date.now()-Number(msg.ts||0))>180000)return;if(w&&peerId&&msg.from)registerPeerRoute(msg.from,w,peerId,w.strategy||'unknown');if(msg.t==='need'){const blob=await getMediaBlob(msg.hash);if(!blob)return;const best=bestAssetRoute(msg.from);let route=best?{wrapper:best.wrapper,peerId:best.peerId}:(w?.asset?.send?{wrapper:w,peerId}:null);if(route)sendAssetToPeer(msg.hash,route.wrapper,route.peerId,msg.from).catch(()=>{})}}
-async function sendAssetToPeer(hash,w,peerId,actor=''){if(mediaTx.size>=MEDIA_MAX_TRANSFERS)return false;const blob=await getMediaBlob(hash);if(!blob||!w?.asset?.send||mediaTx.size>=MEDIA_MAX_TRANSFERS)return false;if(w.strategy==='nkn'&&blob.size>MEDIA_NKN_MAX)return false;const key=`${hash}|${w.name}|${peerId}`,existing=mediaTx.get(key);if(existing)return existing;const job=(async()=>{const chunkSize=w.strategy==='nkn'?MEDIA_NKN_CHUNK:MEDIA_CHUNK,total=Math.ceil(blob.size/chunkSize);if(!total||total>10000)return false;for(let i=0;i<total;i++){if(mediaDestroyed||!mediaByHash(hash)||!w.peers?.has(peerId))return false;const data=new Uint8Array(await blob.slice(i*chunkSize,Math.min(blob.size,(i+1)*chunkSize)).arrayBuffer()),frame=assetChunkFrame(hash,i,total,data),packet=await sealMesh(frame);try{await w.asset.send(packet,{target:peerId})}catch(_){return false}if((i&15)===15)await sleep(0)}return true})().finally(()=>mediaTx.delete(key));mediaTx.set(key,job);return job}
+async function handleAssetControlBytes(bytes,w,peerId){let msg;try{msg=JSON.parse(dec.decode(bytes))}catch(_){return}if(msg?.v!==1||!msg.hash||msg.from===meshActor||Math.abs(Date.now()-Number(msg.ts||0))>180000)return;if(w&&peerId&&msg.from)registerPeerRoute(msg.from,w,peerId,w.strategy||'unknown');if(msg.t==='need'){ensureRelayPeerRoute(msg.from);const blob=await getMediaBlob(msg.hash);if(!blob)return;const best=bestAssetRoute(msg.from);let route=best?{wrapper:best.wrapper,peerId:best.peerId}:(w?.asset?.send?{wrapper:w,peerId}:null);if(route)sendAssetToPeer(msg.hash,route.wrapper,route.peerId,msg.from).catch(()=>{})}}
+async function sendAssetToPeer(hash,w,peerId,actor=''){if(mediaTx.size>=MEDIA_MAX_TRANSFERS)return false;const blob=await getMediaBlob(hash);if(!blob||!w?.asset?.send||mediaTx.size>=MEDIA_MAX_TRANSFERS)return false;const key=`${hash}|${w.name}|${peerId}`,existing=mediaTx.get(key);if(existing)return existing;const job=(async()=>{const chunkSize=MEDIA_CHUNK,total=Math.ceil(blob.size/chunkSize);if(!total||total>10000)return false;for(let i=0;i<total;i++){if(mediaDestroyed||!mediaByHash(hash)||!w.peers?.has(peerId))return false;const data=new Uint8Array(await blob.slice(i*chunkSize,Math.min(blob.size,(i+1)*chunkSize)).arrayBuffer()),frame=assetChunkFrame(hash,i,total,data),packet=await sealMesh(frame);try{if(await w.asset.send(packet,{target:peerId})===false)return false}catch(_){return false}if((i&15)===15)await sleep(0)}return true})().finally(()=>mediaTx.delete(key));mediaTx.set(key,job);return job}
 async function receiveAssetChunk(bytes,w,peerId){
   const c=parseAssetChunk(bytes);if(!c||mediaDestroyed||await hasMediaBlob(c.hash))return;
   const meta=mediaByHash(c.hash);if(!meta||Number(meta.size)>MEDIA_MAX_BYTES)return;
@@ -1014,7 +866,7 @@ function publishMouse(e){const r=$('#editorShell').getBoundingClientRect();mouse
 $('#editorShell').addEventListener('pointermove',publishMouse,{passive:true});$('#editorShell').addEventListener('pointerleave',()=>awareness.setLocalStateField('mouse',null),{passive:true});
 
 function renderPeers(){const states=awareness.getStates(),dots=$('#peerDots');dots.replaceChildren();for(const[id,state]of states){const d=document.createElement('span');d.className='peerDot';d.style.background=state.user?.color||`hsl(${(id*137.5)%360} 68% 68%)`;d.title=state.user?.name||'peer';dots.appendChild(d)}const n=states.size||1;$('#peerCount').textContent=n+' peer'+(n===1?'':'s')}
-awareness.on('change',({added})=>{renderPeers();refreshRemoteCursors();refreshRemoteSelections();syncNknFromAwareness();if(added.length)scheduleMissingMedia();updateMeshState()});
+awareness.on('change',({added})=>{renderPeers();refreshRemoteCursors();refreshRemoteSelections();if(added.length)scheduleMissingMedia();updateMeshState()});
 persistence.on('synced',()=>{updateMeshState();if(pageOrder.length)ensureInitialPage();scheduleRoomSnapshot(60)});
 let knownPageIds=new Set(uniquePageIds());
 pageOrder.observe(()=>{
@@ -1056,7 +908,7 @@ window.addEventListener('resize',()=>{refreshRemoteCursors();refreshRemoteSelect
 function flushRoomSnapshotForExit(){try{clearTimeout(roomCacheTimer);roomCacheTimer=0;writeRoomCacheLocal(room,Y.encodeStateAsUpdate(ydoc),Date.now());snapshotRoomState().catch(()=>{})}catch(_){}}
 window.addEventListener('pagehide',flushRoomSnapshotForExit,{capture:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushRoomSnapshotForExit()},{capture:true});
-window.addEventListener('beforeunload',()=>{clearTimeout(deletedPageCleanupTimer);destroyMedia();flushRoomSnapshotForExit();awareness.setLocalStateField('mouse',null);awareness.setLocalStateField('selection',null);stopMesh();for(const id of [...undoManagers.keys()])destroyUndoManager(id);awareness.destroy();persistence.destroy();ydoc.destroy()});
+window.addEventListener('beforeunload',()=>{clearTimeout(deletedPageCleanupTimer);destroyMedia();flushRoomSnapshotForExit();awareness.setLocalStateField('mouse',null);awareness.setLocalStateField('selection',null);clearTimeout(awarenessSendTimer);stopMesh();for(const id of [...undoManagers.keys()])destroyUndoManager(id);awareness.destroy();persistence.destroy();ydoc.destroy()});
 </script>
 </body>
 </html>
