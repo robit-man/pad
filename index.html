@@ -116,9 +116,11 @@ const $=s=>document.querySelector(s);
 const ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const randomKey=(n=8)=>Array.from(crypto.getRandomValues(new Uint8Array(n)),x=>ALPHABET[x%ALPHABET.length]).join('');
 const cleanKey=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
-let room=cleanKey(location.hash.slice(1));
-if(!room){room=randomKey();history.replaceState(null,'',location.pathname+location.search+'#'+room)}
-else if(location.hash.slice(1)!==room)history.replaceState(null,'',location.pathname+location.search+'#'+room);
+const room=cleanKey(location.hash.slice(1))||randomKey();
+if(location.hash.slice(1)!==room)history.replaceState(null,'',location.pathname+location.search+'#'+room);
+function roomLink(){const url=new URL(location.href);url.searchParams.delete('page');url.hash=room;return url}
+function pageLink(id){const url=roomLink();url.searchParams.set('page',id);return url}
+window.addEventListener('hashchange',()=>{if(cleanKey(location.hash.slice(1))!==room)location.reload()});
 $('#roomKey').textContent='#'+room;$('#roomKey').title='Copy room link';
 document.title='PAD · '+room;
 
@@ -590,8 +592,10 @@ setInterval(()=>{const now=Date.now();for(const[h,x]of mediaRx)if(!x.complete&&n
 window.PADMedia={records:()=>mediaRecords(),request:hash=>broadcastAssetNeed(hash),sync:()=>requestMissingMediaAssets(),transfers:()=>({rx:[...mediaRx].map(([hash,x])=>({hash,parts:x.count,total:x.total,bytes:x.bytes})),tx:[...mediaTx.keys()]}),cache:()=>({memory:[...mediaMem.keys()],urls:[...mediaUrls.keys()],bytes:mediaMemBytes,maxBytes:MEDIA_CACHE_BYTES,reads:mediaLoads.size})};
 window.PADCollab={remoteQueue:()=>({updates:remoteYQueue.length,composing:isComposing,inputDepth:editorInputDepth,deferred:deferredEditorReconcile}),selection:()=>captureEditorBookmark(),flush:()=>flushRemoteYUpdates()};
 
-const origin={name:'textarea'};
+const origin={name:'textarea'},MCP_EDIT_ORIGIN={name:'mcp'};
 let activePage=localStorage.getItem('scratch-min-active:'+room)||'';
+let requestedPage=new URLSearchParams(location.search).get('page'),resolveRoomReady;
+const roomReady=new Promise(resolve=>{resolveRoomReady=resolve});
 let boundText=null,boundObserver=null,lastValue='',previewMode=false,markdownEnabled=localStorage.getItem('pad-markdown-enabled')==='1',markdownRawLine=-1,renderPagesQueued=0,inputApplying=false;
 const UNDO_MAX_ITEMS=100,UNDO_MAX_BYTES=2*1024*1024,UNDO_MAX_MANAGERS=8;
 const undoManagers=new Map(),undoDestroyHandlers=new Map(),disposingUndoManagers=new Set();
@@ -635,7 +639,7 @@ function getUndoManager(id){
   // Yjs 13.6.27 registers an anonymous doc-destroy listener but does not remove
   // it on manual destroy. Track that listener so evicted managers are collectible.
   const before=new Set(ydoc._observers.get('destroy')||[]);
-  um=new Y.UndoManager(pageText(id),{trackedOrigins:new Set([origin]),captureTimeout:450});
+  um=new Y.UndoManager(pageText(id),{trackedOrigins:new Set([origin,MCP_EDIT_ORIGIN]),captureTimeout:450});
   const handler=[...(ydoc._observers.get('destroy')||[])].find(fn=>!before.has(fn));if(handler)undoDestroyHandlers.set(id,handler);
   const refresh=()=>{if(activePage===id&&!disposingUndoManagers.has(id))updateUndoButtons()};
   for(const ev of ['stack-item-added','stack-item-updated'])um.on(ev,change=>{scheduleUndoTrim(change);refresh()});
@@ -659,7 +663,9 @@ function dedupePageOrder(){const arr=pageOrder.toArray(),seen=new Set(),remove=[
 function ensureInitialPage(){
   dedupePageOrder();
   if(pageOrder.length===0)ydoc.transact(()=>pageOrder.insert(0,['p0']),'init');
-  const ids=uniquePageIds(),next=ids.includes(activePage)?activePage:(ids[0]||'p0');
+  const ids=uniquePageIds(),linked=ids.includes(requestedPage)?requestedPage:null;
+  if(linked)requestedPage=null;
+  const next=linked||(ids.includes(activePage)?activePage:ids[0]);
   /* A valid remembered page still has to be bound on reload. Previously this
      branch did nothing when activePage was already valid, so the rail restored
      while the textarea stayed blank until that page was clicked manually. */
@@ -667,7 +673,18 @@ function ensureInitialPage(){
   if(boundText!==pageText(next))bindPage(next);
   queueRenderPages();
 }
-function newPage(){let id;const ids=new Set(uniquePageIds());do{id='p'+randomKey(5).toLowerCase()}while(ids.has(id)||deletedPages.has(id));ydoc.transact(()=>pageOrder.push([id]),'new-page');setActivePage(id);requestAnimationFrame(()=>$('#editor').focus())}
+function newPage({text='',activate=true,focus=activate}={}){
+  let id;
+  const ids=new Set(uniquePageIds());
+  do{id='p'+randomKey(5).toLowerCase()}while(ids.has(id)||deletedPages.has(id));
+  ydoc.transact(()=>{
+    pageOrder.push([id]);
+    if(text)pageText(id).insert(0,text);
+  },'new-page');
+  if(activate)setActivePage(id,{navigate:true});
+  if(focus)requestAnimationFrame(()=>$('#editor').focus());
+  return id
+}
 function deletePage(id){
   const ids=uniquePageIds(),idx=ids.indexOf(id);if(idx<0)return;let next=ids[idx+1]||ids[idx-1]||null;
   destroyUndoManager(id);
@@ -686,7 +703,7 @@ function reclaimDeletedPageText(ids=null,legacy=false){
   ydoc.transact(()=>{for(const id of removed)if(!live.has(id)){if(!deletedPages.has(id))deletedPages.set(id,true);destroyUndoManager(id);const text=pageText(id);if(text.length)text.delete(0,text.length)}},'delete-page')
 }
 function pageLabel(id,index){const raw=pageText(id).toString().trim(),line=(raw.split(/\r?\n/).find(Boolean)||'').replace(/^#{1,6}\s*/,'').trim();return line||`Page ${index+1}`}
-function renderPages(){renderPagesQueued=0;dedupePageOrder();const host=$('#pages'),add=$('#addPage'),ids=uniquePageIds();host.querySelectorAll('.pageBlock:not(.pageAdd)').forEach(x=>x.remove());ids.forEach((id,i)=>{const active=id===activePage,b=document.createElement('div');b.className='pageBlock'+(active?' active':'');b.dataset.page=id;b.title=pageLabel(id,i);b.setAttribute('role','button');b.tabIndex=0;b.innerHTML=`<span class="pageNo">${String(i+1).padStart(2,'0')}</span>${active?'<button class="pageDelete" type="button" aria-label="Delete page" data-tip="Delete page">×</button>':''}<span class="pageLabel"></span>`;b.querySelector('.pageLabel').textContent=pageLabel(id,i).slice(0,8);b.addEventListener('click',e=>{if(e.target.closest('.pageDelete'))return;setActivePage(id)});b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setActivePage(id)}});b.querySelector('.pageDelete')?.addEventListener('click',e=>{e.stopPropagation();deletePage(id)});host.appendChild(b)});host.insertBefore(add,host.firstChild)}
+function renderPages(){renderPagesQueued=0;dedupePageOrder();const host=$('#pages'),add=$('#addPage'),ids=uniquePageIds();host.querySelectorAll('.pageBlock:not(.pageAdd)').forEach(x=>x.remove());ids.forEach((id,i)=>{const active=id===activePage,b=document.createElement('div');b.className='pageBlock'+(active?' active':'');b.dataset.page=id;b.title=pageLabel(id,i);b.setAttribute('role','button');b.tabIndex=0;b.innerHTML=`<span class="pageNo">${String(i+1).padStart(2,'0')}</span>${active?'<button class="pageDelete" type="button" aria-label="Delete page" data-tip="Delete page">×</button>':''}<span class="pageLabel"></span>`;b.querySelector('.pageLabel').textContent=pageLabel(id,i).slice(0,8);const select=()=>setActivePage(id,{navigate:true});b.addEventListener('click',e=>{if(!e.target.closest('.pageDelete'))select()});b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select()}});b.querySelector('.pageDelete')?.addEventListener('click',e=>{e.stopPropagation();deletePage(id)});host.appendChild(b)});host.insertBefore(add,host.firstChild)}
 function queueRenderPages(){if(renderPagesQueued)return;renderPagesQueued=requestAnimationFrame(renderPages)}
 
 function transformSelection(oldV,newV,start,end){let p=0;const max=Math.min(oldV.length,newV.length);while(p<max&&oldV[p]===newV[p])p++;let so=oldV.length-1,sn=newV.length-1;while(so>=p&&sn>=p&&oldV[so]===newV[sn]){so--;sn--}const del=Math.max(0,so-p+1),ins=Math.max(0,sn-p+1),delta=ins-del;const adjust=v=>v<=p?v:v>=p+del?v+delta:p+ins;return[adjust(start),adjust(end)]}
@@ -712,14 +729,38 @@ function bindPage(id){
   boundObserver=(ev,tr)=>{const next=boundText.toString();if(tr.origin===origin){lastValue=next;afterEditorReconcile();return}if(next===lastValue&&$('#editor').value===next)return;if(isComposing||editorInputDepth){deferredEditorReconcile=true;return}reconcileEditorFromCRDT(pendingEditorBookmark||null)};
   boundText.observe(boundObserver);queueRenderPages();refreshRemoteSelections();scheduleMediaRender();if(markdownEnabled)renderLiveMarkdown()
 }
-function setActivePage(id){if(!id)return;markdownRawLine=-1;activePage=id;localStorage.setItem('scratch-min-active:'+room,id);awareness.setLocalStateField('page',id);awareness.setLocalStateField('mouse',null);awareness.setLocalStateField('selection',null);bindPage(id);queueRenderPages();refreshRemoteCursors();refreshRemoteSelections();scheduleMediaRender();scheduleMissingMedia();updateUndoButtons()}
+function setActivePage(id,{navigate=false}={}){
+  if(!id)return;
+  const url=new URL(location.href);
+  if(navigate)requestedPage=null;
+  if(!requestedPage&&(navigate||url.searchParams.has('page'))){
+    const next=pageLink(id);
+    if(next.href!==url.href)history.replaceState(history.state,'',next);
+  }
+  if(activePage===id&&boundText)return;
+  markdownRawLine=-1;activePage=id;localStorage.setItem('scratch-min-active:'+room,id);
+  awareness.setLocalStateField('page',id);awareness.setLocalStateField('mouse',null);awareness.setLocalStateField('selection',null);
+  bindPage(id);queueRenderPages();refreshRemoteCursors();refreshRemoteSelections();scheduleMediaRender();scheduleMissingMedia();updateUndoButtons();
+  resolveRoomReady()
+}
 
+function applyTextEdit(text,oldValue,nextValue){
+  let start=0,oldEnd=oldValue.length,nextEnd=nextValue.length;
+  const limit=Math.min(oldEnd,nextEnd);
+  while(start<limit&&oldValue[start]===nextValue[start])start++;
+  if(start===oldEnd&&start===nextEnd)return;
+  // Y.Text offsets are UTF-16. Keep shared surrogate pairs intact at edit boundaries.
+  if(/[\uD800-\uDBFF]/.test(oldValue[start-1]??''))start--;
+  while(oldEnd>start&&nextEnd>start&&oldValue[oldEnd-1]===nextValue[nextEnd-1]){oldEnd--;nextEnd--}
+  if(/[\uDC00-\uDFFF]/.test(oldValue[oldEnd]??'')){oldEnd++;nextEnd++}
+  if(oldEnd>start)text.delete(start,oldEnd-start);
+  if(nextEnd>start)text.insert(start,nextValue.slice(start,nextEnd))
+}
 
 function commitEditorInput(){
   if(inputApplying||!boundText)return;const ta=$('#editor'),next=ta.value,old=lastValue;if(next===old)return;
   const live=boundText.toString();if(live!==old){reconcileEditorFromCRDT(captureEditorBookmark(),{force:true});return}
-  let p=0,max=Math.min(old.length,next.length);while(p<max&&old[p]===next[p])p++;let so=old.length-1,sn=next.length-1;while(so>=p&&sn>=p&&old[so]===next[sn]){so--;sn--}const del=Math.max(0,so-p+1),ins=next.slice(p,sn+1);
-  editorInputDepth++;try{ydoc.transact(()=>{if(del)boundText.delete(p,del);if(ins)boundText.insert(p,ins)},origin)}finally{editorInputDepth=Math.max(0,editorInputDepth-1)}lastValue=next;
+  editorInputDepth++;try{ydoc.transact(()=>applyTextEdit(boundText,old,next),origin)}finally{editorInputDepth=Math.max(0,editorInputDepth-1)}lastValue=next;
   if(markdownEnabled){settleMarkdownRawLineIfMoved();renderLiveMarkdown()}queueRenderPages();scheduleSelectionPublish();if(deferredEditorReconcile&&!isComposing){deferredEditorReconcile=false;reconcileEditorFromCRDT(captureEditorBookmark(),{force:true})}if(remoteYQueue.length)scheduleRemoteYFlush(0)
 }
 $('#editor').addEventListener('compositionstart',()=>{isComposing=true;clearTimeout(remoteYFlushTimer);remoteYFlushTimer=0});
@@ -833,7 +874,7 @@ $('#preview').addEventListener('click',e=>{if(e.target.closest('a,[data-media-id
 $('#undoBtn').onclick=undoActivePage;
 $('#redoBtn').onclick=redoActivePage;
 $('#mdToggle').onclick=()=>togglePreview();
-$('#addPage').onclick=newPage;
+$('#addPage').onclick=()=>newPage();
 
 const remoteSelections=new Map(),remoteTextCarets=new Map();
 function peerColor(id,state){return state?.user?.color||`hsl(${(id*137.5)%360} 68% 68%)`}
@@ -895,11 +936,11 @@ scheduleRoomSnapshot(80);
 
 function openNewRoom(){const key=randomKey(),u=new URL(location.href);u.hash=key;u.search='';window.open(u.toString(),'_blank','noopener')}
 $('#newRoom').onclick=openNewRoom;
-function showShare(){const link=location.href;$('#shareLink').value=link;const q=$('#qr');q.replaceChildren();if(window.QRCode)new QRCode(q,{text:link,width:192,height:192,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});else q.textContent=room;$('#shareModal').hidden=false;$('#copyLink').focus()}
+function showShare(){const link=roomLink().href;$('#shareLink').value=link;const q=$('#qr');q.replaceChildren();if(window.QRCode)new QRCode(q,{text:link,width:192,height:192,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});else q.textContent=room;$('#shareModal').hidden=false;$('#copyLink').focus()}
 function hideShare(){$('#shareModal').hidden=true}
 $('#shareRoom').onclick=showShare;$('#shareClose').onclick=hideShare;$('#shareModal').addEventListener('pointerdown',e=>{if(e.target===$('#shareModal'))hideShare()});
 $('#copyLink').onclick=async()=>{try{await navigator.clipboard.writeText($('#shareLink').value);$('#copyLink').textContent='COPIED';setTimeout(()=>$('#copyLink').textContent='COPY',1000)}catch(_){$('#shareLink').select();document.execCommand('copy')}};
-$('#roomKey').onclick=async()=>{const link=location.href,el=$('#roomKey'),old=el.textContent;try{await navigator.clipboard.writeText(link)}catch(_){const ta=document.createElement('textarea');ta.value=link;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}el.textContent='COPIED';setTimeout(()=>{el.textContent=old},900)};
+$('#roomKey').onclick=async()=>{const link=roomLink().href,el=$('#roomKey'),old=el.textContent;try{await navigator.clipboard.writeText(link)}catch(_){const ta=document.createElement('textarea');ta.value=link;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}el.textContent='COPIED';setTimeout(()=>{el.textContent=old},900)};
 window.addEventListener('keydown',e=>{if(e.key==='Escape')hideShare()});
 
 const tooltip=$('#tooltip');let tipTimer=0;
@@ -909,6 +950,127 @@ function flushRoomSnapshotForExit(){try{clearTimeout(roomCacheTimer);roomCacheTi
 window.addEventListener('pagehide',flushRoomSnapshotForExit,{capture:true});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushRoomSnapshotForExit()},{capture:true});
 window.addEventListener('beforeunload',()=>{clearTimeout(deletedPageCleanupTimer);destroyMedia();flushRoomSnapshotForExit();awareness.setLocalStateField('mouse',null);awareness.setLocalStateField('selection',null);clearTimeout(awarenessSendTimer);stopMesh();for(const id of [...undoManagers.keys()])destroyUndoManager(id);awareness.destroy();persistence.destroy();ydoc.destroy()});
+
+// The browser tools and the MCP bridge both call the same room-scoped operations.
+function padPageInfo(id,index){
+  return {id,number:index+1,label:pageLabel(id,index),url:pageLink(id).href};
+}
+function padPageIndex(id){
+  const index=uniquePageIds().indexOf(id);
+  if(index<0)throw new Error('Page not found in this room. Call pad_list_pages for available IDs.');
+  return index;
+}
+function padReadPage(id){
+  return {...padPageInfo(id,padPageIndex(id)),text:pageText(id).toString()};
+}
+function padWritePage({pageId,text,mode='append',expectedText}){
+  const current=padReadPage(pageId).text;
+  if(mode==='replace'&&expectedText===undefined)throw new Error('Replace requires expectedText from pad_read_page.');
+  if(expectedText!==undefined&&expectedText!==current)throw new Error('Page text changed. Read the page again before writing.');
+  const normalized=text.replace(/\r\n?/g,'\n');
+  const next=mode==='append'?current+normalized:normalized;
+  if(next!==current){
+    const undo=getUndoManager(pageId);
+    undo?.stopCapturing();
+    const bookmark=pendingEditorBookmark;
+    if(pageId===activePage)pendingEditorBookmark=captureEditorBookmark();
+    try{ydoc.transact(()=>applyTextEdit(pageText(pageId),current,next),MCP_EDIT_ORIGIN)}
+    finally{pendingEditorBookmark=bookmark;undo?.stopCapturing()}
+  }
+  return padReadPage(pageId);
+}
+const padPageIdSchema={type:'string',minLength:1,description:'Stable page ID returned by pad_list_pages or pad_create_page.'};
+const padTextSchema={type:'string',description:'Plain text or Markdown. Include any leading line break needed when appending.'};
+const padInput=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
+const padTools=[
+  {
+    name:'pad_list_pages',
+    description:'List the open room’s pages in sidebar order, including the active ID and live sync status.',
+    inputSchema:padInput({}),
+    annotations:{readOnlyHint:true},
+    execute:()=>({
+      room,
+      url:roomLink().href,
+      activePageId:activePage,
+      pages:uniquePageIds().map(padPageInfo),
+      sync:{livePeers:Math.max(0,awareness.getStates().size-1),remoteStateReceived:receivedRemoteSync}
+    })
+  },
+  {
+    name:'pad_read_page',
+    description:'Read the current text or Markdown of a page. Omit pageId to read the active page.',
+    inputSchema:padInput({pageId:padPageIdSchema}),
+    annotations:{readOnlyHint:true},
+    execute:({pageId=activePage})=>padReadPage(pageId)
+  },
+  {
+    name:'pad_create_page',
+    description:'Create a page in this room with optional initial text. The new page opens by default.',
+    inputSchema:padInput({text:padTextSchema,activate:{type:'boolean',default:true,description:'Open the new page after creating it.'}}),
+    annotations:{destructiveHint:false,idempotentHint:false},
+    persist:true,
+    execute:({text='',activate=true})=>padReadPage(newPage({text:text.replace(/\r\n?/g,'\n'),activate,focus:false}))
+  },
+  {
+    name:'pad_write_page',
+    description:'Append text to a specific page or replace it using the exact previous text. Writes sync to room peers.',
+    inputSchema:padInput({
+      pageId:padPageIdSchema,
+      text:padTextSchema,
+      mode:{type:'string',enum:['append','replace'],default:'append',description:'Append to the current text or replace the entire page text.'},
+      expectedText:{type:'string',description:'Exact current page text. Required for replace and optional for conditional append.'}
+    },['pageId','text']),
+    annotations:{destructiveHint:true,idempotentHint:false},
+    persist:true,
+    execute:padWritePage
+  },
+  {
+    name:'pad_navigate_page',
+    description:'Open a page in the Pad tab and return its direct link.',
+    inputSchema:padInput({pageId:padPageIdSchema},['pageId']),
+    annotations:{destructiveHint:false,idempotentHint:true},
+    execute:({pageId})=>{
+      const index=padPageIndex(pageId);
+      setActivePage(pageId,{navigate:true});
+      return padPageInfo(pageId,index);
+    }
+  }
+];
+const padToolDescriptors=padTools.map(({name,description,inputSchema,annotations})=>({name,description,inputSchema,annotations}));
+async function callPadTool(name,input={}){
+  const tool=padTools.find(tool=>tool.name===name);
+  if(!tool)throw new Error('Unknown Pad tool.');
+  if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('Tool arguments must be an object.');
+  const {properties,required}=tool.inputSchema;
+  for(const key of required)if(!Object.hasOwn(input,key))throw new Error('Missing argument: '+key);
+  for(const [key,value] of Object.entries(input)){
+    if(!Object.hasOwn(properties,key))throw new Error('Unknown argument: '+key);
+    const schema=properties[key];
+    if(typeof value!==schema.type||(schema.minLength&&value.length<schema.minLength)||
+      (schema.enum&&!schema.enum.includes(value)))throw new Error('Invalid argument: '+key);
+  }
+  await roomReady;
+  if(isComposing&&!tool.annotations.readOnlyHint)throw new Error('The editor is composing text. Retry after typing finishes.');
+  flushRemoteYUpdates();
+  const result=tool.execute(input);
+  if(tool.persist)await snapshotRoomState({syncLocal:true});
+  return result;
+}
+Object.defineProperty(window,'PadMCP',{value:Object.freeze({
+  version:1,
+  listTools:()=>structuredClone(padToolDescriptors),
+  callTool:callPadTool
+})});
+const modelContext=document.modelContext??navigator.modelContext;
+if(typeof modelContext?.registerTool==='function'){
+  const registration=Promise.allSettled(padToolDescriptors.map(async descriptor=>{
+    await modelContext.registerTool({...descriptor,execute:input=>callPadTool(descriptor.name,input)});
+  }));
+  modelContext.waitForToolsUntil?.(registration);
+  registration.then(results=>{
+    for(const result of results)if(result.status==='rejected')console.warn('PAD WebMCP tool registration failed:',result.reason);
+  });
+}
 </script>
 </body>
 </html>

@@ -32,6 +32,16 @@ window.__padTest={Y,ydoc,awareness,persistence,pageOrder,mediaMap,origin,
   quiet(){clearInterval(meshSupervisorTimer);clearInterval(routeProbeTimer)}
 };`;
 const html=source.replace(/<\/script>\s*<\/body>/,`${expose}</script></body>`);
+const yjsUrl='https://esm.sh/yjs@13.6.27';
+const offlineImports=new Map([
+  [yjsUrl,'/modules/yjs.mjs'],
+  ['https://esm.sh/y-protocols@1.0.6/awareness?deps=yjs@13.6.27','/modules/awareness.mjs'],
+  ['https://esm.sh/y-indexeddb@9.0.12?deps=yjs@13.6.27','/modules/indexeddb.mjs'],
+]);
+const offlineHtml=source
+  .replace(/<script src="https:\/\/cdnjs[^"]+" defer><\/script>/,'')
+  .replace('<script type="module">','<script>Object.defineProperty(navigator,"onLine",{value:false});</script><script type="module">')
+  .replace(/from '(https:\/\/esm\.sh\/[^']+)'/g,(_,url)=>`from '${offlineImports.get(url)}'`);
 const mqtt=`
 export function connect(url,options){
   const c={url,options,time:Date.now(),connected:false,ended:false,handlers:{},pending:[],
@@ -60,10 +70,15 @@ export async function startBrowser(){
   let executablePath=engine===chromium?process.env.CHROMIUM_PATH:undefined;
   if(engine===chromium&&!executablePath){try{await access(chromium.executablePath())}catch{try{await access('/snap/bin/chromium');executablePath='/snap/bin/chromium'}catch{}}}
   const browser=await engine.launch({executablePath,headless:true,args:engine===chromium?['--disable-gpu','--no-sandbox']:[]});
-  const server=createServer((_,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end(html)});
+  const server=createServer((req,res)=>{
+    const path=new URL(req.url,'http://localhost').pathname;
+    const bundle=bundles.get(path.match(/^\/modules\/(\w+)\.mjs$/)?.[1]);
+    if(bundle){res.writeHead(200,{'Content-Type':'application/javascript'});res.end(bundle.replaceAll(yjsUrl,'/modules/yjs.mjs'));return}
+    res.writeHead(200,{'Content-Type':'text/html'});res.end(path==='/offline/index.html'?offlineHtml:html)
+  });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const base=`http://127.0.0.1:${server.address().port}`,pages=new Set();
-  return{browser,base,
+  return{browser,base,executablePath,
     async close(){await browser.close();await new Promise(resolve=>server.close(resolve))},
     async room(context,key='TESTROOM',options={}){
       const page=await context.newPage(),errors=[];
@@ -74,6 +89,13 @@ export async function startBrowser(){
       });
       await page.addInitScript(options=>{
         window.__networkOptions=options;window.__mockMqtt=[];window.__mockNats=[];window.__mockNatsAttempts=[];window.__mockSockets=[];
+        if(options.webMcp){
+          window.__registeredTools=new Map();
+          Object.defineProperty(document,'modelContext',{value:{
+            async registerTool(tool){window.__registeredTools.set(tool.name,tool)},
+            waitForToolsUntil(ready){window.__toolsReady=ready}
+          }});
+        }
         window.__rtcCreated=0;const NativeRTC=window.RTCPeerConnection;
         window.RTCPeerConnection=class extends NativeRTC{constructor(...args){super(...args);window.__rtcCreated++}};
         if(options.noBroadcast)delete window.BroadcastChannel;

@@ -7,9 +7,12 @@
   },
   "devDependencies": {
     "esbuild": "0.25.12",
-    "playwright-core": "1.58.2",
     "y-indexeddb": "9.0.12",
     "y-protocols": "1.0.6",
     "yjs": "13.6.27"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "playwright-core": "1.58.2"
   }
 }
