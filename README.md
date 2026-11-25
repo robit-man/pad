@@ -2,6 +2,8 @@
 
 Open a hosted room URL such as `https://robit-man.github.io/pad/#SRKPUUNV`. The fragment identifies the room. Each page has a direct link in the form `?page=<id>#<room>`.
 
+The raw HTML contains a `pad-mcp-manifest` JSON block with connection instructions and the tool schemas used by Pad.
+
 ## Page tools
 
 Open the room in a WebMCP-capable browser to make these tools available to its agent. Pad also exposes the same tools to browser automation through `window.PadMCP.listTools()` and `window.PadMCP.callTool(name, args)`.

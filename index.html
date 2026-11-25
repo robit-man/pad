@@ -8,7 +8,101 @@
 <meta name="apple-mobile-web-app-title" content="PAD">
 <meta property="og:title" content="PAD">
 <meta name="twitter:title" content="PAD">
+<meta name="description" content="Collaborative scratchpad. The pad-mcp-manifest block in this HTML describes how agents can list, read, create, write, and navigate room pages.">
 <title>PAD</title>
+<script type="application/json" id="pad-mcp-manifest">
+{
+  "name": "pad",
+  "version": 1,
+  "instructions": [
+    "Read this manifest to discover tools. Use a connection listed below to call them.",
+    "Use the original room URL with its #ROOM fragment. Opening a URL with no room key creates a new room.",
+    "Call pad_list_pages first. Use pages[].id as pageId for the other tools. Page links have the form ?page=<id>#<room>.",
+    "Room data lives in browser profiles and syncs between online peers. Keep an existing peer open when joining from a fresh profile."
+  ],
+  "connections": {
+    "webmcp": {
+      "instructions": "Open the room URL in a WebMCP-capable browser. The tab registers these tools for its agent."
+    },
+    "browserAutomation": {
+      "instructions": "Open the room URL and wait for window.PadMCP. Run tool calls inside that tab.",
+      "example": "await window.PadMCP.callTool('pad_list_pages', {})"
+    },
+    "standardMcp": {
+      "instructions": "Use the bridge with Node.js 20 or newer for stdio or Streamable HTTP. Replace ROOM_URL with the original URL including its fragment.",
+      "repository": "https://github.com/robit-man/pad",
+      "setup": ["git clone https://github.com/robit-man/pad.git", "cd pad", "npm ci", "npx playwright-core install chromium"],
+      "stdio": { "command": "node", "args": ["/absolute/path/to/pad/mcp.mjs", "ROOM_URL"] },
+      "streamableHttp": {
+        "command": "node mcp.mjs --http 7337 'ROOM_URL'",
+        "endpoint": "http://127.0.0.1:7337/mcp"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "pad_list_pages",
+      "description": "List pages in sidebar order. Returns pages with IDs and links, activePageId, and live sync status.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+      "annotations": { "readOnlyHint": true }
+    },
+    {
+      "name": "pad_read_page",
+      "description": "Read the current page text or Markdown in the text field. Omit pageId to read the active page.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pageId": { "type": "string", "minLength": 1, "description": "Stable ID from pad_list_pages or pad_create_page." }
+        },
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true }
+    },
+    {
+      "name": "pad_create_page",
+      "description": "Create a page with optional initial text and return its ID and link. The new page opens by default.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "Initial plain text or Markdown." },
+          "activate": { "type": "boolean", "default": true, "description": "Open the new page after creating it." }
+        },
+        "additionalProperties": false
+      },
+      "annotations": { "destructiveHint": false, "idempotentHint": false }
+    },
+    {
+      "name": "pad_write_page",
+      "description": "Append text to an existing page or replace it using the exact previous text. Writes sync to room peers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pageId": { "type": "string", "minLength": 1, "description": "Stable ID from pad_list_pages or pad_create_page." },
+          "text": { "type": "string", "description": "Plain text or Markdown. Include any separator needed when appending." },
+          "mode": { "type": "string", "enum": ["append", "replace"], "default": "append", "description": "Append to the current text or replace the entire page text." },
+          "expectedText": { "type": "string", "description": "Exact text from pad_read_page. Required for replace and optional for conditional append." }
+        },
+        "required": ["pageId", "text"],
+        "additionalProperties": false
+      },
+      "annotations": { "destructiveHint": true, "idempotentHint": false }
+    },
+    {
+      "name": "pad_navigate_page",
+      "description": "Open a page in the Pad tab and return its direct link.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pageId": { "type": "string", "minLength": 1, "description": "Stable ID from pad_list_pages or pad_create_page." }
+        },
+        "required": ["pageId"],
+        "additionalProperties": false
+      },
+      "annotations": { "destructiveHint": false, "idempotentHint": true }
+    }
+  ]
+}
+</script>
 <style>
 :root{
   --bg:#000;--panel:#080808;--panel2:#0e0e0e;--ink:#ededed;--muted:#6f6f6f;
@@ -979,15 +1073,10 @@ function padWritePage({pageId,text,mode='append',expectedText}){
   }
   return padReadPage(pageId);
 }
-const padPageIdSchema={type:'string',minLength:1,description:'Stable page ID returned by pad_list_pages or pad_create_page.'};
-const padTextSchema={type:'string',description:'Plain text or Markdown. Include any leading line break needed when appending.'};
-const padInput=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
-const padTools=[
-  {
-    name:'pad_list_pages',
-    description:'List the open room’s pages in sidebar order, including the active ID and live sync status.',
-    inputSchema:padInput({}),
-    annotations:{readOnlyHint:true},
+const padManifest=JSON.parse($('#pad-mcp-manifest').textContent);
+const padToolDescriptors=padManifest.tools;
+const padTools={
+  pad_list_pages:{
     execute:()=>({
       room,
       url:roomLink().href,
@@ -996,52 +1085,28 @@ const padTools=[
       sync:{livePeers:Math.max(0,awareness.getStates().size-1),remoteStateReceived:receivedRemoteSync}
     })
   },
-  {
-    name:'pad_read_page',
-    description:'Read the current text or Markdown of a page. Omit pageId to read the active page.',
-    inputSchema:padInput({pageId:padPageIdSchema}),
-    annotations:{readOnlyHint:true},
+  pad_read_page:{
     execute:({pageId=activePage})=>padReadPage(pageId)
   },
-  {
-    name:'pad_create_page',
-    description:'Create a page in this room with optional initial text. The new page opens by default.',
-    inputSchema:padInput({text:padTextSchema,activate:{type:'boolean',default:true,description:'Open the new page after creating it.'}}),
-    annotations:{destructiveHint:false,idempotentHint:false},
+  pad_create_page:{
     persist:true,
     execute:({text='',activate=true})=>padReadPage(newPage({text:text.replace(/\r\n?/g,'\n'),activate,focus:false}))
   },
-  {
-    name:'pad_write_page',
-    description:'Append text to a specific page or replace it using the exact previous text. Writes sync to room peers.',
-    inputSchema:padInput({
-      pageId:padPageIdSchema,
-      text:padTextSchema,
-      mode:{type:'string',enum:['append','replace'],default:'append',description:'Append to the current text or replace the entire page text.'},
-      expectedText:{type:'string',description:'Exact current page text. Required for replace and optional for conditional append.'}
-    },['pageId','text']),
-    annotations:{destructiveHint:true,idempotentHint:false},
-    persist:true,
-    execute:padWritePage
-  },
-  {
-    name:'pad_navigate_page',
-    description:'Open a page in the Pad tab and return its direct link.',
-    inputSchema:padInput({pageId:padPageIdSchema},['pageId']),
-    annotations:{destructiveHint:false,idempotentHint:true},
+  pad_write_page:{persist:true,execute:padWritePage},
+  pad_navigate_page:{
     execute:({pageId})=>{
       const index=padPageIndex(pageId);
       setActivePage(pageId,{navigate:true});
       return padPageInfo(pageId,index);
     }
   }
-];
-const padToolDescriptors=padTools.map(({name,description,inputSchema,annotations})=>({name,description,inputSchema,annotations}));
+};
 async function callPadTool(name,input={}){
-  const tool=padTools.find(tool=>tool.name===name);
-  if(!tool)throw new Error('Unknown Pad tool.');
+  const descriptor=padToolDescriptors.find(tool=>tool.name===name);
+  if(!descriptor)throw new Error('Unknown Pad tool.');
+  const tool=padTools[name];
   if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('Tool arguments must be an object.');
-  const {properties,required}=tool.inputSchema;
+  const {properties,required=[]}=descriptor.inputSchema;
   for(const key of required)if(!Object.hasOwn(input,key))throw new Error('Missing argument: '+key);
   for(const [key,value] of Object.entries(input)){
     if(!Object.hasOwn(properties,key))throw new Error('Unknown argument: '+key);
@@ -1050,14 +1115,14 @@ async function callPadTool(name,input={}){
       (schema.enum&&!schema.enum.includes(value)))throw new Error('Invalid argument: '+key);
   }
   await roomReady;
-  if(isComposing&&!tool.annotations.readOnlyHint)throw new Error('The editor is composing text. Retry after typing finishes.');
+  if(isComposing&&!descriptor.annotations.readOnlyHint)throw new Error('The editor is composing text. Retry after typing finishes.');
   flushRemoteYUpdates();
   const result=tool.execute(input);
   if(tool.persist)await snapshotRoomState({syncLocal:true});
   return result;
 }
 Object.defineProperty(window,'PadMCP',{value:Object.freeze({
-  version:1,
+  version:padManifest.version,
   listTools:()=>structuredClone(padToolDescriptors),
   callTool:callPadTool
 })});

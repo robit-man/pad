@@ -18,7 +18,15 @@ let app;
 before(async () => { app = await startBrowser(); });
 after(async () => { await app?.close(); });
 
-test('WebMCP tools edit the shared room and open stable page links', async t => {
+test('raw HTML describes the WebMCP tools that edit the shared room and open stable page links', async t => {
+  const response = await fetch(`${app.base}/offline/index.html#MCPTOOLS`);
+  assert.equal(response.ok, true);
+  const html = await response.text();
+  const manifest = JSON.parse(html.match(/<script type="application\/json" id="pad-mcp-manifest">([\s\S]*?)<\/script>/)[1]);
+  assert.deepEqual(manifest.tools.map(tool => tool.name), toolNames);
+  assert.match(manifest.instructions.join(' '), /#ROOM fragment/);
+  assert.equal(manifest.connections.standardMcp.stdio.args[1], 'ROOM_URL');
+  assert.equal(manifest.connections.browserAutomation.example, "await window.PadMCP.callTool('pad_list_pages', {})");
   const context = await app.browser.newContext();
   const peerContext = await app.browser.newContext();
   t.after(() => Promise.all([context.close(), peerContext.close()]));
@@ -30,6 +38,7 @@ test('WebMCP tools edit the shared room and open stable page links', async t => 
     return window.__registeredTools.get(name).execute(args);
   }, { name, args });
   assert.deepEqual(await page.evaluate(() => [...window.__registeredTools.keys()]), toolNames);
+  assert.deepEqual(await page.evaluate(() => window.PadMCP.listTools()), manifest.tools);
   const initial = await call('pad_list_pages');
   assert.equal(initial.room, 'MCPTOOLS');
   assert.equal(initial.activePageId, 'p0');
